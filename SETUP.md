@@ -1,5 +1,10 @@
 # BituInsight — Setup Guide
 
+> **Already deployed:** <https://bituinsight.vercel.app> — sign in with
+> `admin@bituinsight.local` / `admin123`. Follow this guide only if you want to run
+> your own copy. **Change that password before real data goes in** (see
+> [Security](#security-important)).
+
 A step-by-step guide to getting BituInsight running. **No prior experience assumed.**
 If you can copy and paste, you can complete this.
 
