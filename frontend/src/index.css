@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --noc-bg: 246 248 252;
+    --noc-surface: 255 255 255;
+    --noc-card: 255 255 255;
+    --noc-border: 226 232 240;
+    --noc-muted: 100 116 139;
+    --noc-text: 15 23 42;
+    --noc-text-dim: 71 85 105;
+    --shadow-glow: 0 0 24px rgba(99, 44, 166, 0.08);
+    --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark {
+    --noc-bg: 13 17 23;
+    --noc-surface: 22 27 34;
+    --noc-card: 26 29 35;
+    --noc-border: 48 54 61;
+    --noc-muted: 139 148 158;
+    --noc-text: 230 237 243;
+    --noc-text-dim: 156 163 175;
+    --shadow-glow: 0 0 20px rgba(99, 44, 166, 0.15);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+
+  * {
+    @apply border-noc-border;
+  }
+
+  body {
+    @apply bg-noc-bg text-noc-text transition-colors duration-200;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-noc-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-noc-border;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-noc-muted;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-noc-accent px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-noc-accentHover focus:outline-none focus:ring-2 focus:ring-noc-accent/50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-noc-border bg-noc-surface px-4 py-2.5 text-sm font-medium text-noc-text transition-all hover:bg-noc-card focus:outline-none focus:ring-2 focus:ring-noc-border disabled:opacity-50;
+  }
+
+  .card {
+    @apply rounded-xl border border-noc-border bg-noc-card p-5 shadow-card transition-colors duration-200;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-noc-border bg-noc-surface px-3 py-2.5 text-sm text-noc-text placeholder-noc-muted transition-colors focus:border-noc-accent focus:outline-none focus:ring-1 focus:ring-noc-accent/50;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-500/10 text-green-600 dark:text-green-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-orange-500/10 text-orange-600 dark:text-orange-400;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-500/10 text-red-600 dark:text-red-400;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-500/10 text-blue-600 dark:text-blue-400;
+  }
+
+  .badge-neutral {
+    @apply badge bg-slate-500/10 text-slate-600 dark:text-gray-400;
+  }
+
+  .dashboard-hero {
+    @apply relative overflow-hidden rounded-2xl border border-noc-border p-6 sm:p-8;
+    background:
+      radial-gradient(ellipse 80% 60% at 100% 0%, rgba(99, 44, 166, 0.22), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 0% 100%, rgba(59, 158, 255, 0.12), transparent 50%),
+      rgb(var(--noc-card));
+  }
+
+  .dashboard-hero::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0 opacity-40;
+    background-image: linear-gradient(
+      135deg,
+      transparent 40%,
+      rgba(99, 44, 166, 0.06) 50%,
+      transparent 60%
+    );
+  }
+
+  .stat-glow {
+    @apply relative overflow-hidden rounded-xl border border-noc-border bg-noc-card p-5 transition-all duration-300;
+  }
+
+  .stat-glow:hover {
+    @apply border-noc-accent/40 shadow-glow;
+    transform: translateY(-2px);
+  }
+
+  .stat-glow::after {
+    content: '';
+    @apply absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 transition-opacity duration-300;
+    background: radial-gradient(circle, rgba(99, 44, 166, 0.15), transparent 70%);
+  }
+
+  .stat-glow:hover::after {
+    @apply opacity-100;
+  }
+}

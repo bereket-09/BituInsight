@@ -1,0 +1,63 @@
+services:
+  postgres:
+    # public.ecr.aws mirror avoids Docker Hub auth.docker.io timeouts
+    image: public.ecr.aws/docker/library/postgres:16-alpine
+    container_name: bituinsight-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bituinsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bituinsight_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-bituinsight}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bituinsight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bituinsight-api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-bituinsight}:${POSTGRES_PASSWORD:-bituinsight_secret}@postgres:5432/${POSTGRES_DB:-bituinsight}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-long-secret}
+      UPLOAD_DIR: /app/uploads
+      REPORTS_DIR: /app/reports
+      CHARTS_DIR: /app/charts
+      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      CORS_ORIGIN: http://localhost:3000
+      LOG_LEVEL: info
+    volumes:
+      - uploads_data:/app/uploads
+      - reports_data:/app/reports
+      - charts_data:/app/charts
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000/api
+    container_name: bituinsight-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:
+  reports_data:
+  charts_data:

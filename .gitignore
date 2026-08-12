@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+uploads/
+reports/
+charts/
+logs/
+.DS_Store
+coverage/
+.vite/
+.vercel
+.env*
