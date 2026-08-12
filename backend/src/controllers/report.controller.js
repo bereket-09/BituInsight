@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const reportService = require('../services/report.service');
 const historyService = require('../services/history.service');
+const { generateReportPptx } = require('../services/pptxExport.service');
 const pool = require('../db/pool');
 
 function parseOptionsFromRequest(body) {
@@ -201,6 +202,32 @@ async function getDashboard(req, res, next) {
   }
 }
 
+async function exportReportPptx(req, res, next) {
+  try {
+    const options = {
+      threshold: req.body?.threshold,
+      defaultThreshold: req.body?.defaultThreshold,
+      theme: req.body?.theme === 'light' ? 'light' : 'dark',
+    };
+    const { buffer, fileName } = await generateReportPptx(
+      req.params.id,
+      req.user.id,
+      options
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  } catch (err) {
+    if (err.message.includes('Report not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    next(err);
+  }
+}
+
 module.exports = {
   previewFile,
   uploadAndProcess,
@@ -210,5 +237,6 @@ module.exports = {
   sendToTeams,
   downloadChart,
   downloadReport,
+  exportReportPptx,
   getDashboard,
 };

@@ -929,6 +929,16 @@ async function generateWorkbookPptx(workbookId, userId, options = {}) {
     kpi.displayThreshold = chart.threshold;
   }
 
+  return buildDeck(workbook, kpiSlides, deckDefaultThreshold, themeId, T);
+}
+
+/**
+ * Assembles the deck from an already-resolved dataset. Kept separate from the
+ * fetching so both the workbook export and the single-report export share one
+ * slide layout — the only thing that differs between them is how the KPI list
+ * and the cover metadata are gathered.
+ */
+async function buildDeck(workbook, kpiSlides, deckDefaultThreshold, themeId, T) {
   const overviewCount = countOverviewSlides(kpiSlides.length);
   const totalPages = 1 + overviewCount + kpiSlides.length + 1;
 
@@ -969,4 +979,91 @@ async function generateWorkbookPptx(workbookId, userId, options = {}) {
   return { buffer, fileName, slideCount: totalPages, theme: themeId };
 }
 
-module.exports = { generateWorkbookPptx, createTheme };
+/**
+ * Single-report equivalent of fetchWorkbookCharts.
+ * Returns a one-element KPI list in the same shape the deck builder expects.
+ */
+async function fetchReportChart(reportId, userId) {
+  const result = await pool.query(
+    `SELECT pr.id as report_id, pr.kpi_name, pr.sheet_name, pr.summary, pr.report_data,
+            pr.created_at, kw.slug as workflow_slug, kw.name as workflow_name,
+            uf.original_filename,
+            gc.title as chart_title, gc.file_path, gc.chart_type
+     FROM processed_reports pr
+     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+     LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
+     LEFT JOIN generated_charts gc ON gc.report_id = pr.id
+     WHERE pr.id = $1 AND pr.user_id = $2 AND pr.status = 'completed'
+     ORDER BY gc.created_at`,
+    [reportId, userId]
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const first = result.rows[0];
+  const charts = [];
+  for (const row of result.rows) {
+    if (row.file_path && fs.existsSync(row.file_path)) {
+      charts.push({ title: row.chart_title, path: row.file_path, type: row.chart_type });
+    }
+  }
+
+  const summary = parseSummary(first.summary);
+  const kpi = {
+    reportId: first.report_id,
+    // Single-KPI uploads often have no kpi_name column value; fall back to the
+    // name the workflow gave the metric, then to the workflow itself.
+    kpiName:
+      first.kpi_name || summary?.kpiName || first.workflow_name || 'KPI',
+    sheetName: first.sheet_name,
+    summary,
+    reportData: parseReportData(first.report_data),
+    workflowSlug: first.workflow_slug,
+    charts,
+  };
+  kpi.mainChart = pickStoredChart(charts);
+
+  return {
+    kpi,
+    report: {
+      original_filename: first.original_filename || `${kpi.kpiName}.xlsx`,
+      created_at: first.created_at,
+    },
+  };
+}
+
+/**
+ * Export a single processed report as a deck. Uses the same slide layout as the
+ * workbook export, with a one-KPI list.
+ */
+async function generateReportPptx(reportId, userId, options = {}) {
+  const { threshold, defaultThreshold, theme: themeOption } = options;
+  const themeId = themeOption === 'light' ? 'light' : 'dark';
+  const T = createTheme(themeId);
+
+  const fetched = await fetchReportChart(reportId, userId);
+  if (!fetched) throw new Error('Report not found, or not completed');
+
+  const { kpi, report } = fetched;
+
+  const deckDefaultThreshold = clampThreshold(
+    defaultThreshold != null ? defaultThreshold : 99
+  );
+
+  const chart = await resolveMainChartForExport(
+    kpi,
+    threshold !== undefined ? threshold : undefined
+  );
+  kpi.mainChart = chart.path ? { path: chart.path } : null;
+  kpi.displayThreshold = chart.threshold;
+
+  const workbookLike = {
+    original_filename: report.original_filename,
+    created_at: report.created_at,
+    defaultThreshold: deckDefaultThreshold,
+  };
+
+  return buildDeck(workbookLike, [kpi], deckDefaultThreshold, themeId, T);
+}
+
+module.exports = { generateWorkbookPptx, generateReportPptx, createTheme };

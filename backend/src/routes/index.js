@@ -74,6 +74,8 @@ router.post(
   upload.single('file'),
   reportController.validateOnly
 );
+router.get('/reports/:id/export/pptx', authenticate, reportController.exportReportPptx);
+router.post('/reports/:id/export/pptx', authenticate, reportController.exportReportPptx);
 router.post('/reports/:id/teams', authenticate, reportController.sendToTeams);
 router.get('/reports/:id/download', authenticate, reportController.downloadReport);
 router.get(

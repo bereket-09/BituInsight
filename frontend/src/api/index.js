@@ -61,6 +61,9 @@ export const reportApi = {
     }),
 };
 
+reportApi.downloadPresentation = (reportId, payload = {}) =>
+  client.post(`/reports/${reportId}/export/pptx`, payload, { responseType: 'blob' });
+
 export const dashboardApi = {
   get: () => client.get('/dashboard'),
 };

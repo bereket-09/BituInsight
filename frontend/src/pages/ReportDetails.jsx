@@ -22,6 +22,7 @@ import CmgThroughputExplorer from '../components/CmgThroughputExplorer';
 import CmgThroughputDataTable from '../components/CmgThroughputDataTable';
 import CmgThroughputInsight from '../components/CmgThroughputInsight';
 import IntelligencePanel from '../components/IntelligencePanel';
+import ReportPptExportButton from '../components/ReportPptExportButton';
 
 export default function ReportDetails() {
   const { id } = useParams();
@@ -137,6 +138,10 @@ export default function ReportDetails() {
           )}
           {report.status === 'completed' && (
             <>
+              <ReportPptExportButton
+                reportId={id}
+                fileName={report.original_filename?.replace(/\.[^.]+$/, '')}
+              />
               <button onClick={handleDownload} className="btn-secondary">
                 <Download className="h-4 w-4" />
                 Download

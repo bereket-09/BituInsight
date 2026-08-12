@@ -185,6 +185,25 @@ function buildChartJsConfig(chartConfig) {
 async function generateChart(chartConfig, outputDir, reportId) {
   const isMainLine = chartConfig.id === 'traffic-volume-lines';
   const renderer = getRenderer(isMainLine ? 1200 : 1000, isMainLine ? 560 : 480);
+
+  // Callers such as the PPTX exporter invoke this directly rather than through
+  // generateAllCharts, so the no-renderer case has to degrade here too — a deck
+  // with text-only slides beats a failed export.
+  if (!renderer) {
+    logger.info('Chart rendering unavailable — returning chart without image', {
+      chartId: chartConfig.id,
+      reason: canvasUnavailableReason,
+    });
+    return {
+      chartType: chartConfig.type,
+      title: chartConfig.title,
+      filePath: null,
+      filename: null,
+      config: chartConfig,
+      skipped: true,
+    };
+  }
+
   const jsConfig = buildChartJsConfig(chartConfig);
   const buffer = await renderer.renderToBuffer(jsConfig);
 
