@@ -193,8 +193,11 @@ async function getReportById(reportId, userId) {
     [reportId]
   );
 
+  // Explicit column list: image_data holds the PNG bytes, and selecting it here
+  // would ship a few hundred KB of binary to the browser on every report view.
   const chartsResult = await pool.query(
-    'SELECT * FROM generated_charts WHERE report_id = $1 ORDER BY created_at',
+    `SELECT id, report_id, chart_type, title, file_path, config, image_bytes, created_at
+     FROM generated_charts WHERE report_id = $1 ORDER BY created_at`,
     [reportId]
   );
 

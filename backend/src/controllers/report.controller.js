@@ -152,7 +152,14 @@ async function downloadChart(req, res, next) {
       return res.status(404).json({ error: 'Chart not found' });
     }
 
-    const filename = `${chart.title.replace(/\s+/g, '_')}.png`;
+    // Chart titles carry en/em dashes and other non-ASCII punctuation, which are
+    // illegal in an HTTP header and make the response throw rather than download.
+    const filename = `${(chart.title || 'chart')
+      .normalize('NFKD')
+      .replace(/[^\x20-\x7E]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 100) || 'chart'}.png`;
 
     // Stored bytes are the durable copy and are preferred everywhere.
     if (chart.image_data) {

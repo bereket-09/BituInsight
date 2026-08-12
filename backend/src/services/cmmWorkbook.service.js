@@ -9,6 +9,7 @@ const { readSheetRows } = require('./excelParser.service');
 const { validateStructure } = require('../kpi-workflows/telecom-metric/validator');
 const { TELECOM_METRIC_SLUG, validateReport, processReport } = require('./workflowEngine.service');
 const { DEFAULT_THRESHOLD_PERCENT } = require('../kpi-workflows/telecom-metric/constants');
+const chartStorage = require('./chartStorage.service');
 
 const CMM_HEADER_ROW = 0;
 const CMM_DATA_START_ROW = 2;
@@ -253,17 +254,13 @@ async function saveMetrics(reportId, metrics) {
   }
 }
 
+/**
+ * Persist a workbook KPI's charts through the shared storage layer so the image
+ * bytes are kept, not just a filesystem path that will not survive the request.
+ * Replaces any previous set for the report.
+ */
 async function saveCharts(reportId, charts) {
-  const saved = [];
-  for (const chart of charts) {
-    const result = await pool.query(
-      `INSERT INTO generated_charts (report_id, chart_type, title, file_path, config)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [reportId, chart.chartType, chart.title, chart.filePath, JSON.stringify(chart.config)]
-    );
-    saved.push(result.rows[0]);
-  }
-  return saved;
+  return chartStorage.replaceReportCharts(reportId, charts);
 }
 
 async function processSingleKpiReport(reportId, filePath, kpiMeta, thresholdConfig = {}) {
