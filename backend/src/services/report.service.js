@@ -6,6 +6,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { processReport, validateReport, previewExcel } = require('./workflowEngine.service');
 const { sendToTeams } = require('./teams.service');
+const chartStorage = require('./chartStorage.service');
 
 async function getWorkflowIdBySlug(slug) {
   const result = await pool.query('SELECT id FROM kpi_workflows WHERE slug = $1', [slug]);
@@ -84,16 +85,13 @@ async function saveMetrics(reportId, metrics) {
   }
 }
 
+/**
+ * Persist the report's charts, replacing any previous set so a re-run cannot
+ * accumulate orphaned images, then take the opportunity to prune expired ones.
+ */
 async function saveCharts(reportId, charts) {
-  const saved = [];
-  for (const chart of charts) {
-    const result = await pool.query(
-      `INSERT INTO generated_charts (report_id, chart_type, title, file_path, config)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [reportId, chart.chartType, chart.title, chart.filePath, JSON.stringify(chart.config)]
-    );
-    saved.push(result.rows[0]);
-  }
+  const saved = await chartStorage.replaceReportCharts(reportId, charts);
+  await chartStorage.pruneExpiredChartImages();
   return saved;
 }
 

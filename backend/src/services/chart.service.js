@@ -13,17 +13,17 @@ const DARK_THEME = {
   grid: 'rgba(139, 148, 158, 0.12)',
 };
 
-const chartRenderers = {};
-
 /**
- * chartjs-node-canvas pulls in the native `canvas` binding, which needs Cairo and
- * Pango at runtime. Those exist in the Docker image but not on serverless hosts,
- * so the module is loaded lazily and its absence degrades to "no PNGs" instead of
- * crashing the whole upload. The UI charts are rendered client-side by Recharts
- * either way; these PNGs are for downloads, PPTX export, and Teams cards.
+ * Rendering runs on @napi-rs/canvas rather than the `canvas` binding that
+ * chartjs-node-canvas pulls in. The former ships prebuilt binaries with the
+ * graphics stack statically linked, so it needs no system Cairo/Pango and works
+ * unchanged on serverless hosts, where the old path could not render at all.
+ *
+ * Chart.js is driven directly here — chartjs-node-canvas only wrapped it.
  */
 let canvasModule;
 let canvasUnavailableReason = null;
+let fontsRegistered = false;
 
 function loadCanvas() {
   if (canvasModule || canvasUnavailableReason) return canvasModule;
@@ -32,7 +32,8 @@ function loadCanvas() {
     return null;
   }
   try {
-    canvasModule = require('chartjs-node-canvas');
+    canvasModule = require('@napi-rs/canvas');
+    registerBundledFonts();
   } catch (err) {
     canvasUnavailableReason = err.message;
     logger.warn('Server-side chart rendering unavailable — reports will omit PNG charts', {
@@ -42,8 +43,79 @@ function loadCanvas() {
   return canvasModule;
 }
 
+/**
+ * Serverless images ship with essentially no fonts, so Skia would draw a chart
+ * with no readable text. DejaVu is bundled as a dependency and registered
+ * explicitly — the same family the Docker image installs, so output matches
+ * across environments.
+ */
+function registerBundledFonts() {
+  if (fontsRegistered || !canvasModule) return;
+  const { GlobalFonts } = canvasModule;
+  const faces = [
+    ['DejaVuSans.ttf', CHART_FONT],
+    ['DejaVuSans-Bold.ttf', CHART_FONT],
+  ];
+
+  for (const [file, family] of faces) {
+    try {
+      const fontPath = require.resolve(`dejavu-fonts-ttf/ttf/${file}`);
+      GlobalFonts.registerFromPath(fontPath, family);
+    } catch (err) {
+      logger.warn('Could not register bundled chart font', { file, error: err.message });
+    }
+  }
+
+  fontsRegistered = true;
+  logger.info('Chart fonts registered', { family: CHART_FONT, available: GlobalFonts.families.length });
+}
+
 function chartRenderingAvailable() {
   return Boolean(loadCanvas());
+}
+
+/**
+ * Chart.js draws only what it is told to; the canvas itself starts transparent.
+ * This paints the NOC background behind the finished chart so exported PNGs match
+ * the dark UI instead of arriving see-through.
+ */
+const backgroundPlugin = {
+  id: 'nocBackground',
+  beforeDraw(chart) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = DARK_THEME.background;
+    ctx.fillRect(0, 0, chart.width, chart.height);
+    ctx.restore();
+  },
+};
+
+function renderChartToBuffer(chartConfig, width, height) {
+  const mod = loadCanvas();
+  if (!mod) return null;
+
+  const { Chart, registerables } = require('chart.js');
+  if (!Chart.__bituRegistered) {
+    Chart.register(...registerables);
+    Chart.__bituRegistered = true;
+  }
+  registerChartFonts(Chart);
+
+  const canvas = mod.createCanvas(width, height);
+  // Chart.js probes DOM-ish properties during initialisation.
+  canvas.style = {};
+
+  const jsConfig = buildChartJsConfig(chartConfig);
+  jsConfig.options = { ...(jsConfig.options || {}), responsive: false, animation: false };
+  jsConfig.plugins = [...(jsConfig.plugins || []), backgroundPlugin];
+
+  const chart = new Chart(canvas.getContext('2d'), jsConfig);
+  try {
+    return canvas.toBuffer('image/png');
+  } finally {
+    chart.destroy();
+  }
 }
 
 function registerChartFonts(ChartJS) {
@@ -64,21 +136,9 @@ function fontSpec(size, weight = 'normal') {
   return { family: CHART_FONT, size, weight, style: 'normal' };
 }
 
-function getRenderer(width = 1100, height = 520) {
-  const mod = loadCanvas();
-  if (!mod) return null;
-  const { ChartJSNodeCanvas } = mod;
-
-  const key = `${width}x${height}`;
-  if (!chartRenderers[key]) {
-    chartRenderers[key] = new ChartJSNodeCanvas({
-      width,
-      height,
-      backgroundColour: DARK_THEME.background,
-      chartCallback: registerChartFonts,
-    });
-  }
-  return chartRenderers[key];
+function chartDimensions(chartConfig) {
+  const isMainLine = chartConfig.id === 'traffic-volume-lines';
+  return { width: isMainLine ? 1200 : 1000, height: isMainLine ? 560 : 480 };
 }
 
 function buildChartJsConfig(chartConfig) {
@@ -182,14 +242,21 @@ function buildChartJsConfig(chartConfig) {
   };
 }
 
+/**
+ * Renders a chart and returns its PNG bytes.
+ *
+ * `outputDir` is optional and only used to keep a copy on disk for local and
+ * Docker runs; the buffer is the artefact callers actually persist, because a
+ * serverless filesystem does not survive the request.
+ */
 async function generateChart(chartConfig, outputDir, reportId) {
-  const isMainLine = chartConfig.id === 'traffic-volume-lines';
-  const renderer = getRenderer(isMainLine ? 1200 : 1000, isMainLine ? 560 : 480);
+  const { width, height } = chartDimensions(chartConfig);
+  const buffer = renderChartToBuffer(chartConfig, width, height);
 
   // Callers such as the PPTX exporter invoke this directly rather than through
   // generateAllCharts, so the no-renderer case has to degrade here too — a deck
   // with text-only slides beats a failed export.
-  if (!renderer) {
+  if (!buffer) {
     logger.info('Chart rendering unavailable — returning chart without image', {
       chartId: chartConfig.id,
       reason: canvasUnavailableReason,
@@ -197,6 +264,7 @@ async function generateChart(chartConfig, outputDir, reportId) {
     return {
       chartType: chartConfig.type,
       title: chartConfig.title,
+      buffer: null,
       filePath: null,
       filename: null,
       config: chartConfig,
@@ -204,22 +272,27 @@ async function generateChart(chartConfig, outputDir, reportId) {
     };
   }
 
-  const jsConfig = buildChartJsConfig(chartConfig);
-  const buffer = await renderer.renderToBuffer(jsConfig);
-
   const filename = `${reportId}_${chartConfig.id}.png`;
-  const filePath = path.join(outputDir, filename);
+  let filePath = null;
 
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  if (outputDir) {
+    try {
+      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+      filePath = path.join(outputDir, filename);
+      fs.writeFileSync(filePath, buffer);
+    } catch (err) {
+      // Read-only filesystem: the buffer is still valid, so this is not fatal.
+      filePath = null;
+      logger.debug('Chart not written to disk', { chartId: chartConfig.id, error: err.message });
+    }
   }
 
-  fs.writeFileSync(filePath, buffer);
-  logger.info('Chart generated', { chartId: chartConfig.id, filePath });
+  logger.info('Chart generated', { chartId: chartConfig.id, bytes: buffer.length });
 
   return {
     chartType: chartConfig.type,
     title: chartConfig.title,
+    buffer,
     filePath,
     filename,
     config: chartConfig,

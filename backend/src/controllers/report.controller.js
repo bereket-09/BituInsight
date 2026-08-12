@@ -3,6 +3,7 @@ const path = require('path');
 const reportService = require('../services/report.service');
 const historyService = require('../services/history.service');
 const { generateReportPptx } = require('../services/pptxExport.service');
+const chartStorage = require('../services/chartStorage.service');
 const pool = require('../db/pool');
 
 function parseOptionsFromRequest(body) {
@@ -141,23 +142,31 @@ async function sendToTeams(req, res, next) {
 
 async function downloadChart(req, res, next) {
   try {
-    const result = await pool.query(
-      `SELECT gc.* FROM generated_charts gc
-       JOIN processed_reports pr ON gc.report_id = pr.id
-       WHERE gc.id = $1 AND pr.id = $2 AND pr.user_id = $3`,
-      [req.params.chartId, req.params.id, req.user.id]
+    const chart = await chartStorage.loadChartImage(
+      req.params.chartId,
+      req.params.id,
+      req.user.id
     );
 
-    if (result.rows.length === 0) {
+    if (!chart) {
       return res.status(404).json({ error: 'Chart not found' });
     }
 
-    const chart = result.rows[0];
-    if (!fs.existsSync(chart.file_path)) {
-      return res.status(404).json({ error: 'Chart file not found on disk' });
+    const filename = `${chart.title.replace(/\s+/g, '_')}.png`;
+
+    // Stored bytes are the durable copy and are preferred everywhere.
+    if (chart.image_data) {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(chart.image_data);
     }
 
-    res.download(chart.file_path, `${chart.title.replace(/\s+/g, '_')}.png`);
+    // Charts generated before image storage existed still live on disk.
+    if (chart.file_path && fs.existsSync(chart.file_path)) {
+      return res.download(chart.file_path, filename);
+    }
+
+    return res.status(404).json({ error: 'Chart image is no longer available' });
   } catch (err) {
     next(err);
   }

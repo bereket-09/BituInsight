@@ -91,10 +91,31 @@ function parseReportData(reportData) {
 
 function pickStoredChart(charts) {
   return (
-    charts.find((c) => c.path?.includes('metric-trend-threshold')) ||
-    charts.find((c) => c.path?.includes('metric-trend')) ||
+    charts.find((c) => c.id?.includes('metric-trend-threshold') || c.path?.includes('metric-trend-threshold')) ||
+    charts.find((c) => c.id?.includes('metric-trend') || c.path?.includes('metric-trend')) ||
     charts[0]
   );
+}
+
+/**
+ * Normalise a stored chart row into what pptxgenjs accepts.
+ * Database bytes are preferred; a file path is the fallback for charts generated
+ * before images were stored, and for local runs.
+ */
+function toSlideImage(row) {
+  const image = { title: row.chart_title || row.title, type: row.chart_type };
+  if (row.image_data) {
+    image.data = `image/png;base64,${row.image_data.toString('base64')}`;
+  }
+  if (row.file_path && fs.existsSync(row.file_path)) {
+    image.path = row.file_path;
+  }
+  return image.data || image.path ? image : null;
+}
+
+/** True when an image reference actually carries something renderable. */
+function hasImage(image) {
+  return Boolean(image && (image.data || image.path));
 }
 
 async function resolveMainChartForExport(kpi, thresholdOverride) {
@@ -130,23 +151,29 @@ async function resolveMainChartForExport(kpi, thresholdOverride) {
     });
     const chartCfg =
       chartConfigs.find((c) => c.id === 'metric-trend-threshold') || chartConfigs[0];
-    const exportDir = path.join(config.chartsDir, 'pptx-export', kpi.reportId);
+    // Regenerated for this export only — deliberately not persisted, since it
+    // reflects a one-off threshold override rather than the report's own charts.
+    const exportDir = config.chartsDir
+      ? path.join(config.chartsDir, 'pptx-export', kpi.reportId)
+      : null;
     const generated = await generateChart(chartCfg, exportDir, kpi.reportId);
-    return { path: generated.filePath, threshold: effectiveThreshold };
+    const image = generated.buffer
+      ? { data: `image/png;base64,${generated.buffer.toString('base64')}` }
+      : generated.filePath
+        ? { path: generated.filePath }
+        : null;
+    return { image, threshold: effectiveThreshold };
   }
 
-  if (stored?.path && fs.existsSync(stored.path)) {
-    return { path: stored.path, threshold: effectiveThreshold };
-  }
-
-  return { path: null, threshold: effectiveThreshold };
+  return { image: hasImage(stored) ? stored : null, threshold: effectiveThreshold };
 }
 
 async function fetchWorkbookCharts(workbookId, userId) {
   const result = await pool.query(
     `SELECT pr.id as report_id, pr.kpi_name, pr.sheet_name, pr.summary, pr.report_data,
             kw.slug as workflow_slug,
-            gc.title as chart_title, gc.file_path, gc.chart_type
+            gc.id as chart_id, gc.title as chart_title, gc.file_path, gc.chart_type,
+            gc.image_data
      FROM processed_reports pr
      JOIN kpi_workflows kw ON pr.workflow_id = kw.id
      LEFT JOIN generated_charts gc ON gc.report_id = pr.id
@@ -170,12 +197,9 @@ async function fetchWorkbookCharts(workbookId, userId) {
         charts: [],
       });
     }
-    if (row.file_path && fs.existsSync(row.file_path)) {
-      byKpi.get(key).charts.push({
-        title: row.chart_title,
-        path: row.file_path,
-        type: row.chart_type,
-      });
+    const image = toSlideImage(row);
+    if (image) {
+      byKpi.get(key).charts.push({ ...image, id: row.chart_id });
     }
   }
 
@@ -802,9 +826,12 @@ function addKpiSlide(pptx, kpi, index, total, T, pageNum, totalPages) {
     rectRadius: 0.1,
   });
 
-  if (kpi.mainChart?.path) {
+  if (hasImage(kpi.mainChart)) {
     slide.addImage({
-      path: kpi.mainChart.path,
+      // Stored bytes go in as base64; a path is used only for on-disk fallbacks.
+      ...(kpi.mainChart.data
+        ? { data: kpi.mainChart.data }
+        : { path: kpi.mainChart.path }),
       x: chartX + 0.1,
       y: chartY + 0.1,
       w: chartW - 0.2,
@@ -925,7 +952,7 @@ async function generateWorkbookPptx(workbookId, userId, options = {}) {
       kpi,
       override !== undefined ? override : undefined
     );
-    kpi.mainChart = chart.path ? { path: chart.path } : null;
+    kpi.mainChart = chart.image || null;
     kpi.displayThreshold = chart.threshold;
   }
 
@@ -988,7 +1015,8 @@ async function fetchReportChart(reportId, userId) {
     `SELECT pr.id as report_id, pr.kpi_name, pr.sheet_name, pr.summary, pr.report_data,
             pr.created_at, kw.slug as workflow_slug, kw.name as workflow_name,
             uf.original_filename,
-            gc.title as chart_title, gc.file_path, gc.chart_type
+            gc.id as chart_id, gc.title as chart_title, gc.file_path, gc.chart_type,
+            gc.image_data
      FROM processed_reports pr
      JOIN kpi_workflows kw ON pr.workflow_id = kw.id
      LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
@@ -1003,9 +1031,8 @@ async function fetchReportChart(reportId, userId) {
   const first = result.rows[0];
   const charts = [];
   for (const row of result.rows) {
-    if (row.file_path && fs.existsSync(row.file_path)) {
-      charts.push({ title: row.chart_title, path: row.file_path, type: row.chart_type });
-    }
+    const image = toSlideImage(row);
+    if (image) charts.push({ ...image, id: row.chart_id });
   }
 
   const summary = parseSummary(first.summary);
@@ -1054,7 +1081,7 @@ async function generateReportPptx(reportId, userId, options = {}) {
     kpi,
     threshold !== undefined ? threshold : undefined
   );
-  kpi.mainChart = chart.path ? { path: chart.path } : null;
+  kpi.mainChart = chart.image || null;
   kpi.displayThreshold = chart.threshold;
 
   const workbookLike = {
