@@ -111,53 +111,69 @@ async function previewReportFile(workflowSlug, filePath) {
   return previewExcel(filePath, workflowSlug);
 }
 
-async function processReportAsync(reportId, workflowSlug, filePath, parseOptions = {}) {
-  setImmediate(async () => {
-    try {
-      await updateReportStatus(reportId, 'validating');
+/**
+ * Serverless platforms freeze the function the moment it sends a response, so
+ * anything deferred with setImmediate is killed part-way through and the report is
+ * left stranded at "validating". Detect that environment and run the pipeline
+ * inline instead, so the work finishes inside the request.
+ */
+const PROCESS_INLINE =
+  process.env.PROCESS_REPORTS_INLINE === 'true' || Boolean(process.env.VERCEL);
 
-      const validation = await validateReport(workflowSlug, filePath, parseOptions);
-      if (!validation.valid) {
-        await updateReportStatus(reportId, 'failed', {
-          validation_errors: validation.errors,
-          error_message: 'Validation failed',
-        });
-        return;
-      }
+async function runReportPipeline(reportId, workflowSlug, filePath, parseOptions = {}) {
+  try {
+    await updateReportStatus(reportId, 'validating');
 
-      await updateReportStatus(reportId, 'processing');
-      const workflowContext = parseOptions.workflowContext || {};
-      const result = await processReport(workflowSlug, filePath, reportId, parseOptions, workflowContext);
-
-      if (!result.success) {
-        await updateReportStatus(reportId, 'failed', {
-          validation_errors: result.validationErrors,
-          error_message: 'Processing failed',
-        });
-        return;
-      }
-
-      await saveMetrics(reportId, result.metrics);
-      const savedCharts = await saveCharts(reportId, result.charts);
-
-      const reportJsonPath = path.join(config.reportsDir, `${reportId}.json`);
-      if (!fs.existsSync(config.reportsDir)) fs.mkdirSync(config.reportsDir, { recursive: true });
-      fs.writeFileSync(
-        reportJsonPath,
-        JSON.stringify({ summary: result.summary, reportData: result.reportData }, null, 2)
-      );
-
-      await updateReportStatus(reportId, 'completed', {
-        summary: result.summary,
-        report_data: { ...result.reportData, charts: savedCharts.map((c) => ({ id: c.id, title: c.title, type: c.chart_type })) },
+    const validation = await validateReport(workflowSlug, filePath, parseOptions);
+    if (!validation.valid) {
+      await updateReportStatus(reportId, 'failed', {
+        validation_errors: validation.errors,
+        error_message: 'Validation failed',
       });
-
-      logger.info('Report processing completed', { reportId });
-    } catch (err) {
-      logger.error('Report processing failed', { reportId, error: err.message });
-      await updateReportStatus(reportId, 'failed', { error_message: err.message });
+      return;
     }
-  });
+
+    await updateReportStatus(reportId, 'processing');
+    const workflowContext = parseOptions.workflowContext || {};
+    const result = await processReport(workflowSlug, filePath, reportId, parseOptions, workflowContext);
+
+    if (!result.success) {
+      await updateReportStatus(reportId, 'failed', {
+        validation_errors: result.validationErrors,
+        error_message: 'Processing failed',
+      });
+      return;
+    }
+
+    await saveMetrics(reportId, result.metrics);
+    const savedCharts = await saveCharts(reportId, result.charts);
+
+    const reportJsonPath = path.join(config.reportsDir, `${reportId}.json`);
+    if (!fs.existsSync(config.reportsDir)) fs.mkdirSync(config.reportsDir, { recursive: true });
+    fs.writeFileSync(
+      reportJsonPath,
+      JSON.stringify({ summary: result.summary, reportData: result.reportData }, null, 2)
+    );
+
+    await updateReportStatus(reportId, 'completed', {
+      summary: result.summary,
+      report_data: { ...result.reportData, charts: savedCharts.map((c) => ({ id: c.id, title: c.title, type: c.chart_type })) },
+    });
+
+    logger.info('Report processing completed', { reportId });
+  } catch (err) {
+    logger.error('Report processing failed', { reportId, error: err.message });
+    await updateReportStatus(reportId, 'failed', { error_message: err.message });
+  }
+}
+
+async function processReportAsync(reportId, workflowSlug, filePath, parseOptions = {}) {
+  if (PROCESS_INLINE) {
+    await runReportPipeline(reportId, workflowSlug, filePath, parseOptions);
+    return;
+  }
+  // Long-lived server: return immediately and finish the work in the background.
+  setImmediate(() => runReportPipeline(reportId, workflowSlug, filePath, parseOptions));
 }
 
 async function getReportById(reportId, userId) {

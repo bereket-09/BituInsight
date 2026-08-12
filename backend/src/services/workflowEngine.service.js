@@ -40,8 +40,11 @@ async function buildIntelligence(workflowSlug, calculated, transformed, context 
     if (!Array.isArray(primary) || primary.length < 3) return null;
 
     const profile = ANALYTICS_PROFILES[workflowSlug] || { unit: '', streams: null };
+    // The workflow's own declared name wins: upstream plumbing passes the detected
+    // metric *column* as context.kpiName, which for CMG is a header like "CMG name"
+    // rather than the KPI it represents.
     const analysis = analyze(primary, {
-      kpiName: context.kpiName || calculated?.metrics?.kpiName || 'KPI',
+      kpiName: calculated?.metrics?.kpiName || context.kpiName || 'KPI',
       unit: context.unit || calculated?.metrics?.unit || profile.unit,
       streams: profile.streams,
       threshold: context.threshold,
@@ -51,7 +54,7 @@ async function buildIntelligence(workflowSlug, calculated, transformed, context 
     if (!analysis.available) return analysis;
 
     analysis.narrative = await generateNarrative(analysis, {
-      kpiName: context.kpiName || calculated?.metrics?.kpiName,
+      kpiName: calculated?.metrics?.kpiName || context.kpiName,
       workflowName: workflowSlug,
       sheetName: context.sheetName,
     });
