@@ -6,6 +6,12 @@ const logger = require('../utils/logger');
 /** Must match a font installed in the Docker image (see Dockerfile) */
 const CHART_FONT = 'DejaVu Sans';
 
+/**
+ * The family actually handed to Chart.js. Normally the bundled DejaVu, but it
+ * drops to a platform font if registration fails, so labels still draw.
+ */
+let CHART_FONT_RESOLVED = CHART_FONT;
+
 const DARK_THEME = {
   background: '#0d1117',
   text: '#e6edf3',
@@ -52,22 +58,46 @@ function loadCanvas() {
 function registerBundledFonts() {
   if (fontsRegistered || !canvasModule) return;
   const { GlobalFonts } = canvasModule;
-  const faces = [
-    ['DejaVuSans.ttf', CHART_FONT],
-    ['DejaVuSans-Bold.ttf', CHART_FONT],
-  ];
 
-  for (const [file, family] of faces) {
+  // The font files are vendored under backend/assets rather than pulled from
+  // node_modules: a serverless bundler traces static requires, and a .ttf resolved
+  // through a template string is invisible to it, so the file never ships and the
+  // chart renders with no text at all.
+  const fontDir = path.join(__dirname, '../../assets/fonts');
+  let registered = 0;
+
+  for (const file of ['DejaVuSans.ttf', 'DejaVuSans-Bold.ttf']) {
+    const fontPath = path.join(fontDir, file);
     try {
-      const fontPath = require.resolve(`dejavu-fonts-ttf/ttf/${file}`);
-      GlobalFonts.registerFromPath(fontPath, family);
+      if (fs.existsSync(fontPath) && GlobalFonts.registerFromPath(fontPath, CHART_FONT)) {
+        registered += 1;
+      }
     } catch (err) {
       logger.warn('Could not register bundled chart font', { file, error: err.message });
     }
   }
 
   fontsRegistered = true;
-  logger.info('Chart fonts registered', { family: CHART_FONT, available: GlobalFonts.families.length });
+
+  if (registered === 0) {
+    // Fall back to whatever the platform provides so labels still draw.
+    const fallback = GlobalFonts.families?.[0]?.family;
+    if (fallback) {
+      CHART_FONT_RESOLVED = fallback;
+      logger.warn('Bundled chart fonts unavailable — falling back', { fallback, fontDir });
+    } else {
+      logger.error('No fonts available to the chart renderer; charts will have no text', {
+        fontDir,
+      });
+    }
+    return;
+  }
+
+  logger.info('Chart fonts registered', {
+    family: CHART_FONT,
+    files: registered,
+    available: GlobalFonts.families.length,
+  });
 }
 
 function chartRenderingAvailable() {
@@ -119,7 +149,7 @@ function renderChartToBuffer(chartConfig, width, height) {
 }
 
 function registerChartFonts(ChartJS) {
-  ChartJS.defaults.font.family = CHART_FONT;
+  ChartJS.defaults.font.family = CHART_FONT_RESOLVED;
   ChartJS.defaults.color = DARK_THEME.text;
 }
 
@@ -133,7 +163,7 @@ function formatAxisValue(value) {
 }
 
 function fontSpec(size, weight = 'normal') {
-  return { family: CHART_FONT, size, weight, style: 'normal' };
+  return { family: CHART_FONT_RESOLVED, size, weight, style: 'normal' };
 }
 
 function chartDimensions(chartConfig) {

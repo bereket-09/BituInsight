@@ -5,7 +5,7 @@
       "src": "backend/api/index.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["backend/src/**", "database/**"],
+        "includeFiles": ["backend/src/**", "backend/assets/**", "database/**"],
         "maxDuration": 60
       }
     },
