@@ -224,8 +224,12 @@ kvTable([
   ['Hosting', 'Vercel — frontend and API'],
   ['Database', 'Neon managed PostgreSQL'],
   [
-    'Chart downloads',
-    'Charts display normally in the browser. Downloading them as image files, and embedding them in PowerPoint exports, is unavailable on this host; a Docker install has the full feature.',
+    'Upload size',
+    'Files up to about 4.5 MB, the hosting platform’s request limit. Larger NetAct exports need a self-hosted install, which has no such cap.',
+  ],
+  [
+    'Charts',
+    'Rendered on the server and stored in the database, so they are available in the browser, as image downloads, and embedded in PowerPoint exports. Around 260 KB is kept per report; re-processing a report replaces its images rather than accumulating them.',
   ],
   [
     'AI summaries',

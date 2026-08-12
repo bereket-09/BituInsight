@@ -112,11 +112,10 @@ async function previewReportFile(workflowSlug, filePath) {
 /**
  * Serverless platforms freeze the function the moment it sends a response, so
  * anything deferred with setImmediate is killed part-way through and the report is
- * left stranded at "validating". Detect that environment and run the pipeline
- * inline instead, so the work finishes inside the request.
+ * left stranded at "validating". config.processInline detects that environment so
+ * the pipeline runs inside the request instead.
  */
-const PROCESS_INLINE =
-  process.env.PROCESS_REPORTS_INLINE === 'true' || Boolean(process.env.VERCEL);
+const PROCESS_INLINE = config.processInline;
 
 async function runReportPipeline(reportId, workflowSlug, filePath, parseOptions = {}) {
   try {

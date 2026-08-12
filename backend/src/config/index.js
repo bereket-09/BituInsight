@@ -18,9 +18,15 @@ const config = {
   // Optional. Without it the platform still produces a deterministic narrative;
   // with it, reports also get a Claude-authored executive summary.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-  // Serverless platforms have no writable app directory and no Cairo libs, so
-  // server-side PNG chart rendering is skipped there.
+  // Escape hatch for hosts where chart rendering must be turned off.
   chartsEnabled: process.env.DISABLE_CHART_RENDERING !== 'true',
+  /**
+   * Run upload processing inside the request instead of deferring it.
+   * Serverless functions are frozen the moment they respond, so deferred work is
+   * killed part-way through and the upload is left stranded.
+   */
+  processInline:
+    process.env.PROCESS_REPORTS_INLINE === 'true' || Boolean(process.env.VERCEL),
 };
 
 module.exports = config;

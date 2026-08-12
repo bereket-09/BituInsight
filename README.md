@@ -15,7 +15,9 @@ Production-grade telecom KPI workflow engine for Excel report ingestion, KPI-spe
   forecasting, capacity headroom, and data-quality scoring (see below)
 - **Executive narratives** — Optional Claude-authored summary per report, with a
   deterministic fallback so a report always carries a written summary
-- **Chart generation** — Server-side Chart.js PNG rendering (dark-mode optimized)
+- **Chart generation** — Server-side Chart.js PNG rendering via `@napi-rs/canvas`
+  (no system graphics libraries required); images stored in Postgres so they survive
+  on hosts without a persistent disk
 - **Historical reports** — Full processing history with re-download and Teams re-send
 - **Microsoft Teams** — Incoming Webhook delivery with formatted MessageCards
 - **Operations dashboard** — NOC-style dark UI

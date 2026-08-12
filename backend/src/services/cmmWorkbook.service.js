@@ -336,79 +336,96 @@ async function processSingleKpiReport(reportId, filePath, kpiMeta, thresholdConf
   }
 }
 
-async function processWorkbookAsync(workbookId, userId, filePath, fileInfo, thresholdConfig = {}) {
-  setImmediate(async () => {
-    try {
-      await pool.query(
-        `UPDATE workbook_uploads SET status = 'processing' WHERE id = $1`,
-        [workbookId]
-      );
+async function runWorkbookPipeline(workbookId, userId, filePath, fileInfo, thresholdConfig = {}) {
+  try {
+    await pool.query(
+      `UPDATE workbook_uploads SET status = 'processing' WHERE id = $1`,
+      [workbookId]
+    );
 
-      const wbRow = await pool.query(`SELECT summary FROM workbook_uploads WHERE id = $1`, [
-        workbookId,
-      ]);
-      const wbSummary = wbRow.rows[0]?.summary || {};
-      const mergedThresholds = parseWorkbookThresholds({
-        defaultThreshold: wbSummary.defaultThreshold ?? thresholdConfig.defaultThreshold,
-        kpiThresholds: { ...thresholdConfig.kpiThresholds, ...wbSummary.kpiThresholds },
-      });
+    const wbRow = await pool.query(`SELECT summary FROM workbook_uploads WHERE id = $1`, [
+      workbookId,
+    ]);
+    const wbSummary = wbRow.rows[0]?.summary || {};
+    const mergedThresholds = parseWorkbookThresholds({
+      defaultThreshold: wbSummary.defaultThreshold ?? thresholdConfig.defaultThreshold,
+      kpiThresholds: { ...thresholdConfig.kpiThresholds, ...wbSummary.kpiThresholds },
+    });
 
-      const preview = await previewWorkbook(filePath);
-      const workflowId = await getWorkflowId();
-      const toProcess = preview.validKpis;
+    const preview = await previewWorkbook(filePath);
+    const workflowId = await getWorkflowId();
+    const toProcess = preview.validKpis;
 
-      const childReports = [];
-      for (const kpi of toProcess) {
-        const report = await createChildReport(userId, workflowId, workbookId, fileInfo, kpi);
-        childReports.push({ report, kpi });
-      }
-
-      let completed = 0;
-      let failed = 0;
-
-      for (const { report, kpi } of childReports) {
-        const outcome = await processSingleKpiReport(
-          report.id,
-          filePath,
-          kpi,
-          mergedThresholds
-        );
-        if (outcome.success) completed++;
-        else failed++;
-      }
-
-      const finalStatus = failed === toProcess.length ? 'failed' : 'completed';
-      await pool.query(
-        `UPDATE workbook_uploads SET
-           status = $2,
-           kpi_count = $3,
-           summary = $4,
-           completed_at = NOW()
-         WHERE id = $1`,
-        [
-          workbookId,
-          finalStatus,
-          completed,
-          JSON.stringify({
-            preview,
-            completed,
-            failed,
-            total: toProcess.length,
-            defaultThreshold: mergedThresholds.defaultThreshold,
-            kpiThresholds: mergedThresholds.kpiThresholds,
-          }),
-        ]
-      );
-
-      logger.info('Workbook processing finished', { workbookId, completed, failed });
-    } catch (err) {
-      logger.error('Workbook processing failed', { workbookId, error: err.message });
-      await pool.query(
-        `UPDATE workbook_uploads SET status = 'failed', summary = $2, completed_at = NOW() WHERE id = $1`,
-        [workbookId, JSON.stringify({ error: err.message })]
-      );
+    const childReports = [];
+    for (const kpi of toProcess) {
+      const report = await createChildReport(userId, workflowId, workbookId, fileInfo, kpi);
+      childReports.push({ report, kpi });
     }
-  });
+
+    let completed = 0;
+    let failed = 0;
+
+    for (const { report, kpi } of childReports) {
+      const outcome = await processSingleKpiReport(
+        report.id,
+        filePath,
+        kpi,
+        mergedThresholds
+      );
+      if (outcome.success) completed++;
+      else failed++;
+    }
+
+    const finalStatus = failed === toProcess.length ? 'failed' : 'completed';
+    await pool.query(
+      `UPDATE workbook_uploads SET
+         status = $2,
+         kpi_count = $3,
+         summary = $4,
+         completed_at = NOW()
+       WHERE id = $1`,
+      [
+        workbookId,
+        finalStatus,
+        completed,
+        JSON.stringify({
+          preview,
+          completed,
+          failed,
+          total: toProcess.length,
+          defaultThreshold: mergedThresholds.defaultThreshold,
+          kpiThresholds: mergedThresholds.kpiThresholds,
+        }),
+      ]
+    );
+
+    logger.info('Workbook processing finished', { workbookId, completed, failed });
+  } catch (err) {
+    logger.error('Workbook processing failed', { workbookId, error: err.message });
+    await pool.query(
+      `UPDATE workbook_uploads SET status = 'failed', summary = $2, completed_at = NOW() WHERE id = $1`,
+      [workbookId, JSON.stringify({ error: err.message })]
+    );
+  }
+}
+
+/**
+ * Same constraint as single reports: a serverless function is frozen once it
+ * responds, so deferring this work would strand the workbook mid-processing.
+ * Runs inline there, in the background on a long-lived server.
+ *
+ * A workbook fans out to one full KPI pipeline per sheet, so a large one can
+ * approach the platform's function time limit — failing loudly beats a workbook
+ * that silently never finishes.
+ */
+async function processWorkbookAsync(workbookId, userId, filePath, fileInfo, thresholdConfig = {}) {
+  if (config.processInline) {
+    await runWorkbookPipeline(workbookId, userId, filePath, fileInfo, thresholdConfig);
+    return;
+  }
+  setImmediate(() =>
+    runWorkbookPipeline(workbookId, userId, filePath, fileInfo, thresholdConfig)
+  );
 }
 
 async function getWorkbookById(workbookId, userId) {

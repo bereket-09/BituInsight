@@ -197,7 +197,6 @@ vercel env add JWT_SECRET production
 vercel env add UPLOAD_DIR production
 vercel env add REPORTS_DIR production
 vercel env add CHARTS_DIR production
-vercel env add DISABLE_CHART_RENDERING production
 ```
 
 Paste these values when prompted:
@@ -209,7 +208,9 @@ Paste these values when prompted:
 | `UPLOAD_DIR` | `/tmp/uploads` |
 | `REPORTS_DIR` | `/tmp/reports` |
 | `CHARTS_DIR` | `/tmp/charts` |
-| `DISABLE_CHART_RENDERING` | `true` |
+
+> Do **not** set `DISABLE_CHART_RENDERING` — charts render fine on cloud hosts, and
+> setting it would switch them off.
 
 **5. Prepare the database** (run once, from the project folder):
 
@@ -315,13 +316,15 @@ Without a key nothing breaks — you just get the calculated summary instead.
 | `port 3000 is already in use` | Something else is using that port | Close the other program, or run `npm run dev -- --port 3001` |
 | Login says "Invalid credentials" | Seed never ran, or password changed | Run `npm run db:setup` in `backend` |
 | Blank page after login | Backend isn't running | Check the backend terminal for red errors |
-| Reports have no downloadable chart images | Normal on cloud hosting | Charts still display in the browser; see note below |
+| Charts render but have no text | The font files didn't ship | Confirm `backend/assets/fonts/*.ttf` exist; on a cloud host they must be in `includeFiles` in `vercel.json` |
+| Reports have no chart images at all | Rendering is switched off | Make sure `DISABLE_CHART_RENDERING` is **not** set to `true` |
+| Upload rejected on the cloud, works locally | File is over the host's request limit | Vercel caps uploads at about 4.5 MB; use a Docker install for larger exports |
 
-**About chart images on the cloud:** generating PNG files needs graphics libraries
-that Vercel's servers don't provide. Charts still appear and work in the browser
-(they're drawn by your browser, not the server) — only *downloading* charts as image
-files and embedding them in PowerPoint exports is unavailable. Docker and local
-installs have the full feature.
+**Where chart images live:** charts are rendered on the server and the PNG bytes
+are stored in the database, so they survive on hosts with no permanent disk. Each
+report holds roughly 260 KB. Re-processing a report replaces its old images rather
+than piling up new ones, and images older than `CHART_RETENTION_DAYS` (default 90)
+are cleared automatically while the report itself is kept.
 
 Still stuck? Open an issue at
 <https://github.com/bereket-09/BituInsight/issues> and paste the red error text.
