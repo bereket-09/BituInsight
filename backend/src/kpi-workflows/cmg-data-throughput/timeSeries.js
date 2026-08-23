@@ -62,17 +62,29 @@ function getWeekNumber(d) {
   return Math.ceil(((d - onejan) / 86400000 + onejan.getDay() + 1) / 7);
 }
 
+/**
+ * Local Y-M-D key. The hour and month buckets already work in local time, and the
+ * labels shown to the reader are local too, so the day and week buckets use the
+ * same basis rather than mixing in UTC.
+ */
+function localDayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+}
+
 function bucketKey(date, bucket) {
   const d = new Date(date);
   if (bucket === 'native') return d.toISOString();
   if (bucket === 'hour') {
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
   }
-  if (bucket === 'day') return d.toISOString().split('T')[0];
+  if (bucket === 'day') return localDayKey(d);
   if (bucket === 'week') {
-    const start = new Date(d);
-    start.setDate(d.getDate() - d.getDay());
-    return start.toISOString().split('T')[0];
+    // Build the week start at local midnight. Keeping the row's time of day and
+    // then reading a UTC date string moved the key back a day whenever local
+    // time was earlier than the offset, so one week could produce several keys.
+    return localDayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay()));
   }
   return d.toISOString();
 }
@@ -177,7 +189,8 @@ function findMinPoint(series) {
 function buildDailyPeaks(nativeSeries) {
   const byDay = new Map();
   for (const p of nativeSeries) {
-    const dayKey = p.timestamp.slice(0, 10);
+    // Local, to agree with the daily buckets and the labels on each point.
+    const dayKey = localDayKey(new Date(p.timestamp));
     if (!byDay.has(dayKey)) byDay.set(dayKey, []);
     byDay.get(dayKey).push(p);
   }

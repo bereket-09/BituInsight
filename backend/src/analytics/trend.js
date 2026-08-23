@@ -9,7 +9,10 @@ const { DAY } = require('./seasonality');
 function toDailyMedians(points) {
   const byDay = new Map();
   for (const p of points) {
-    const key = p.timestamp.slice(0, 10);
+    // Local day, matching the seasonal baselines and the point labels.
+    const key = `${p.date.getFullYear()}-${String(p.date.getMonth() + 1).padStart(2, '0')}-${String(
+      p.date.getDate()
+    ).padStart(2, '0')}`;
     if (!byDay.has(key)) byDay.set(key, { key, date: p.date, values: [] });
     byDay.get(key).values.push(p.value);
   }
