@@ -10,6 +10,7 @@ const { validateStructure } = require('../kpi-workflows/telecom-metric/validator
 const { TELECOM_METRIC_SLUG, validateReport, processReport } = require('./workflowEngine.service');
 const { DEFAULT_THRESHOLD_PERCENT, isUnset } = require('../kpi-workflows/telecom-metric/constants');
 const chartStorage = require('./chartStorage.service');
+const sourceFile = require('./sourceFile.service');
 
 const CMM_HEADER_ROW = 0;
 const CMM_DATA_START_ROW = 2;
@@ -180,7 +181,13 @@ async function createWorkbookUpload(userId, fileInfo, thresholdOptions = {}) {
     ]
   );
 
-  return { workbook: result.rows[0], preview, thresholdConfig };
+  const workbook = result.rows[0];
+
+  // Keep the bytes so a later threshold change does not depend on /tmp still
+  // holding the upload — on a serverless host it will not.
+  await sourceFile.retainWorkbookFile(workbook.id, fileInfo.path);
+
+  return { workbook, preview, thresholdConfig };
 }
 
 async function createChildReport(userId, workflowId, workbookId, fileInfo, kpiMeta) {
@@ -555,6 +562,10 @@ async function updateKpiThreshold(workbookId, reportId, userId, threshold) {
     ]
   );
 
+  // The upload directory does not persist on a serverless host, so recover the
+  // file from its stored bytes when the path no longer resolves.
+  const sourcePath = await sourceFile.resolveWorkbookFile(workbookId, wb.stored_path);
+
   const kpiMeta = {
     sheetName: report.sheet_name,
     kpiName: report.kpi_name,
@@ -564,7 +575,7 @@ async function updateKpiThreshold(workbookId, reportId, userId, threshold) {
   };
 
   if (!kpiMeta.metricColumnName) {
-    const preview = await previewWorkbook(wb.stored_path);
+    const preview = await previewWorkbook(sourcePath);
     const found = preview.kpis.find((k) => k.kpiName === report.kpi_name);
     kpiMeta.metricColumnName = found?.metricColumnName || report.kpi_name;
   }
@@ -579,7 +590,7 @@ async function updateKpiThreshold(workbookId, reportId, userId, threshold) {
 
   const outcome = await processSingleKpiReport(
     reportId,
-    wb.stored_path,
+    sourcePath,
     kpiMeta,
     thresholdConfig
   );
