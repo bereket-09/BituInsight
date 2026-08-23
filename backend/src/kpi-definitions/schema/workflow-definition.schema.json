@@ -1,0 +1,417 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://coreinsight.local/schemas/kpi-workflow-definition/1.0.json",
+  "title": "Core Insight KPI workflow definition",
+  "description": "A KPI workflow expressed as data. An external AI produces one of these documents in a chat; a human imports it through the Core Insight UI; src/kpi-definitions/validator.js accepts or rejects it; src/kpi-definitions/compile.js binds it to a generic interpreter that produces exactly what a hand-written workflow module produces. Nothing in this document ever becomes code — every operation name is looked up in a fixed table. THIS FILE IS DOCUMENTATION: validator.js is the enforcing implementation and is stricter in places JSON Schema cannot express (cross-references, reserved identifiers, byte size). Keep the two in step; both carry schemaVersion 1.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "slug", "name", "source", "transform", "series", "metrics"],
+
+  "properties": {
+    "schemaVersion": {
+      "description": "Version of THIS schema. Bump when the vocabulary changes incompatibly; the validator refuses versions it does not implement.",
+      "type": "string",
+      "enum": ["1.0"]
+    },
+    "slug": {
+      "description": "Stable machine identifier, unique across workflows. A built-in code workflow with the same slug always wins, so an import can add a KPI but never redefine one.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "maxLength": 1000 },
+    "version": {
+      "description": "Version of this definition's own content (not the schema).",
+      "type": "string",
+      "pattern": "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "string", "maxLength": 80 },
+        "technology": { "type": "array", "maxItems": 12, "items": { "type": "string", "maxLength": 80 } },
+        "reportType": { "type": "string", "maxLength": 80 },
+        "icon": { "type": "string", "maxLength": 40 },
+        "unit": {
+          "description": "Display unit for the measured value ('Gbps', 'GB', ''). Also fed to the analytics/narrative layer.",
+          "type": "string",
+          "maxLength": 20
+        }
+      }
+    },
+
+    "source": {
+      "description": "What the uploaded workbook must look like: which sheet, which header row, which columns and what they may be called.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["columns"],
+      "properties": {
+        "sheet": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namePatterns": {
+              "description": "Case-insensitive substrings that identify the right worksheet; used to score sheets during auto-detection.",
+              "type": "array",
+              "maxItems": 12,
+              "items": { "type": "string", "maxLength": 120 }
+            },
+            "headerRowIndex": { "description": "0-based row holding the column headers.", "type": "integer", "minimum": 0, "maximum": 1000 },
+            "dataStartRowIndex": { "description": "0-based first data row. Nokia/Ericsson exports usually put a field-code row between the header and the data, making this headerRowIndex + 2.", "type": "integer", "minimum": 0, "maximum": 1000 }
+          }
+        },
+        "headerMatch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "description": "exact: header equals alias. contains: header contains alias (traffic-volume behaviour). loose: either contains the other (cmg behaviour, needed for headers like 'dlMaxMbps (dlMaxMbps)').",
+              "type": "string",
+              "enum": ["exact", "contains", "loose"],
+              "default": "contains"
+            },
+            "stripParentheses": { "description": "Drop '(...)' groups from headers before matching.", "type": "boolean", "default": false },
+            "normalizeWhitespace": { "description": "Collapse underscores and runs of whitespace to single spaces.", "type": "boolean", "default": true }
+          }
+        },
+        "skipFieldCodeRows": {
+          "description": "Drop rows whose numeric columns hold ALL-CAPS field codes instead of numbers.",
+          "type": "boolean",
+          "default": true
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "label", "type", "aliases"],
+            "properties": {
+              "key": { "description": "Identifier this column is known by in later stages.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "label": { "description": "Human name, shown in 'Missing required column: …'.", "type": "string", "maxLength": 80 },
+              "type": { "type": "string", "enum": ["date", "number", "string"] },
+              "required": { "type": "boolean", "default": true },
+              "aliases": {
+                "description": "Accepted header spellings, normalised before matching. The first is quoted back to the user as the expected name.",
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 24,
+                "items": { "type": "string", "maxLength": 120 }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "transform": {
+      "description": "Row -> record. Source columns are already readable by their key; this stage renames/coerces them and computes derived fields in declaration order (a derived field may only reference fields declared before it).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestampField"],
+      "properties": {
+        "timestampField": { "description": "Column key of type 'date' that positions each row in time. Rows with an unparseable value are dropped.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+        "entityField": { "description": "Field whose distinct values are listed on the summary (PLMN, SAM, site).", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+        "fields": {
+          "description": "Straight column picks with type coercion and a default.",
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "from", "type"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "from": { "description": "Source column key.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "type": { "type": "string", "enum": ["number", "string", "date"] },
+              "default": { "description": "Used when the cell is empty or uncoercible.", "type": ["number", "string", "null"] },
+              "dropRowIfNull": { "description": "Discard the whole row when this field ends up null.", "type": "boolean", "default": false }
+            }
+          }
+        },
+        "derived": {
+          "description": "Computed fields. Each entry names exactly one op from the closed set below.",
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "required": ["name", "op"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "op": {
+                "type": "string",
+                "enum": ["sum", "difference", "product", "ratio", "scale", "constant", "coalesce", "classify", "datePart"]
+              },
+              "fields": { "description": "sum/product/difference/coalesce operands (field names).", "type": "array", "minItems": 1, "maxItems": 12, "items": { "type": "string" } },
+              "field": { "description": "scale/classify/datePart operand.", "type": "string" },
+              "numerator": { "description": "ratio numerator field.", "type": "string" },
+              "denominator": { "description": "ratio denominator field; a zero denominator yields 0.", "type": "string" },
+              "asPercent": { "description": "ratio: multiply by 100.", "type": "boolean" },
+              "factor": { "description": "scale: multiplier.", "type": "number" },
+              "scale": { "description": "sum/product/ratio: multiply the result.", "type": "number" },
+              "divisor": {
+                "description": "sum/product/scale: DIVIDE the result. Present alongside 'scale' on purpose — x/1000 and x*0.001 are different floating-point operations, and unit conversions must be able to say which one they mean.",
+                "type": "number"
+              },
+              "value": { "description": "constant: the literal value.", "type": ["number", "string"] },
+              "treatZeroAsMissing": { "description": "coalesce: treat 0 as absent, so a zeroed total falls through to the fallback.", "type": "boolean" },
+              "fallback": {
+                "description": "coalesce: used when every listed field is missing. Restricted to sum/scale/constant and NOT recursive, which keeps evaluation depth constant.",
+                "type": "object",
+                "properties": { "op": { "type": "string", "enum": ["sum", "constant", "scale"] } }
+              },
+              "rules": {
+                "description": "classify: literal predicates tried in order; the first match wins. There is no regex form — untrusted patterns are a ReDoS vector.",
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 24,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["match", "text", "value"],
+                  "properties": {
+                    "match": { "type": "string", "enum": ["contains", "equals", "startsWith", "endsWith"] },
+                    "text": { "type": "string", "maxLength": 80 },
+                    "value": { "type": "string", "maxLength": 80 }
+                  }
+                }
+              },
+              "default": { "description": "classify: value when no rule matches (null means unclassified).", "type": ["string", "null"] },
+              "caseInsensitive": { "type": "boolean", "default": true },
+              "dropRowIfNull": { "description": "classify: discard rows that classify to null. Also turns 'nothing classified' into an upload validation error.", "type": "boolean", "default": false },
+              "unclassifiedMessage": { "description": "Error text shown when no sampled row classifies.", "type": "string", "maxLength": 300 },
+              "part": { "description": "datePart component.", "type": "string", "enum": ["year", "month", "day", "hour", "weekday", "dateKey", "isoString"] }
+            }
+          }
+        }
+      }
+    },
+
+    "series": {
+      "description": "How records become a time series. The interpreter always emits native/hourly/daily/weekly/monthly views plus a 'primary' chosen from the detected cadence.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "valueField": { "description": "Numeric field carrying the measurement.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+        "aggregate": { "description": "How rows combine inside a bucket.", "type": "string", "enum": ["sum", "avg", "max", "min"], "default": "sum" },
+        "totalMode": {
+          "description": "'valueField' accumulates the measured field row by row (independent streams). 'streams' adds the finished stream buckets together — correct when the streams partition the value field, and it matches how a hand-written calculator totals a period.",
+          "type": "string",
+          "enum": ["valueField", "streams"]
+        },
+        "streams": {
+          "description": "Named sub-series. Two forms: from.field alone reads that field as the stream's value (4G vs 2G/3G columns); from.field + from.equals slices valueField by a classifier (MDC1 vs MDC2 rows).",
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "label", "from"],
+            "properties": {
+              "key": { "description": "Field name this stream occupies on every series point.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "label": { "type": "string", "maxLength": 80 },
+              "from": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field"],
+                "properties": {
+                  "field": { "type": "string" },
+                  "equals": { "description": "Slice mode: rows where `field` equals this string contribute valueField to this stream.", "type": "string", "maxLength": 80 }
+                }
+              },
+              "sharePctField": { "description": "Name for this stream's share-of-total field on each point. Default `<key>SharePct`.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+              "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+              "fill": { "description": "Hex or rgba() only.", "type": "string" }
+            }
+          }
+        },
+        "granularity": { "description": "Force a bucketing instead of detecting it from the median sample interval.", "type": "string", "enum": ["auto", "native", "hourly", "daily", "weekly", "monthly"], "default": "auto" },
+        "granularityLabels": {
+          "description": "Rename the detected cadence in user-visible copy (cmg calls sub-hourly data '15-minute').",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "subhourly": { "type": "string", "maxLength": 80 },
+            "hourly": { "type": "string", "maxLength": 80 },
+            "daily": { "type": "string", "maxLength": 80 },
+            "weekly": { "type": "string", "maxLength": 80 },
+            "monthly": { "type": "string", "maxLength": 80 }
+          }
+        },
+        "spanFormat": { "description": "'short' -> '8 May 2026 – 11 May 2026'; 'numeric' -> '08/05/2026 – 11/05/2026'.", "type": "string", "enum": ["short", "numeric"], "default": "short" },
+        "includeDailyPeaks": { "type": "boolean", "default": true },
+        "splitOutputKey": { "description": "Extra name for the stream-totals array on the calculated result (e.g. 'nodeSplit', 'technologySplit'), so existing views find the key they expect.", "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+        "totalColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "totalFill": { "type": "string" }
+      }
+    },
+
+    "metrics": {
+      "description": "Named aggregations. These become calculated.metrics and are the tokens available to narrative templates, highlights and Teams facts.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "op"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+          "label": { "type": "string", "maxLength": 80 },
+          "op": {
+            "description": "sum/avg/min/max/count/countDistinct/first/last: folds over the chosen source. sharePct: field total as a percentage of ofField total. peak*/min*/latest*: read the extreme or newest series point. constant: a literal. builtin: a value the interpreter already knows.",
+            "type": "string",
+            "enum": ["sum", "avg", "min", "max", "count", "countDistinct", "first", "last", "sharePct", "peakLabel", "peakValue", "minLabel", "minValue", "latestLabel", "latestValue", "constant", "builtin"]
+          },
+          "over": {
+            "description": "'series' folds over the aggregated primary points; 'records' folds over the transformed rows. They agree for sums while aggregate is 'sum' and diverge otherwise, so be explicit.",
+            "type": "string",
+            "enum": ["series", "records"],
+            "default": "series"
+          },
+          "field": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$" },
+          "fields": {
+            "description": "sum only: total each field separately and then add the totals. Not the same floating-point result as adding row by row, and the right way to express a combined total over partitioned streams.",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": { "type": "string" }
+          },
+          "ofField": { "description": "sharePct denominator field, default 'total'.", "type": "string" },
+          "value": { "description": "constant only.", "type": ["number", "string"] },
+          "ref": {
+            "description": "builtin only.",
+            "type": "string",
+            "enum": ["granularityKey", "granularityLabel", "periodLabel", "spanLabel", "spanStart", "spanEnd", "pointCount", "dayCount", "recordCount", "streamCount"]
+          },
+          "round": { "type": "integer", "minimum": 0, "maximum": 6, "default": 2 },
+          "format": { "type": "string", "enum": ["number", "integer", "percent", "text", "throughput", "bytes", "compact"] },
+          "unit": { "description": "Appended by the number/throughput formats.", "type": "string", "maxLength": 20 }
+        }
+      }
+    },
+
+    "charts": {
+      "description": "Chart.js configs. Structural options (tension bounds, point radius, dark-theme borders) are fixed by the interpreter; a definition chooses fields, colours and titles only.",
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "title"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+          "type": { "type": "string", "enum": ["line", "area", "bar", "doughnut", "pie"] },
+          "title": { "type": "string", "maxLength": 120 },
+          "description": { "type": "string", "maxLength": 300 },
+          "source": { "description": "'series' plots per-point fields; 'split' plots the stream totals as a pie/doughnut and takes no series list.", "type": "string", "enum": ["series", "split"], "default": "series" },
+          "appendGranularity": { "description": "Suffix the title with the detected granularity, e.g. ' (Hourly)'.", "type": "boolean", "default": false },
+          "stacked": { "type": "boolean", "default": false },
+          "fillArea": { "type": "boolean" },
+          "tension": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.35 },
+          "series": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field"],
+              "properties": {
+                "field": { "description": "A field present on a series point: 'total', a stream key, or a stream's sharePct field.", "type": "string" },
+                "label": { "type": "string", "maxLength": 80 },
+                "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "fill": { "type": "string" },
+                "stack": { "type": "string", "maxLength": 40 },
+                "fillArea": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "anomalies": {
+      "description": "Spike detection over the primary series: mean ± sigma * population standard deviation. Deeper analysis already happens in src/analytics for every workflow.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": { "type": "string", "enum": ["stddev"], "default": "stddev" },
+        "sigma": { "type": "number", "minimum": 0.5, "maximum": 6, "default": 2 },
+        "direction": { "type": "string", "enum": ["above", "below", "both"], "default": "above" },
+        "minPoints": { "type": "integer", "minimum": 2, "maximum": 1000, "default": 3 },
+        "field": { "type": "string", "default": "total" },
+        "type": { "type": "string", "maxLength": 80, "default": "spike" },
+        "format": { "type": "string", "enum": ["number", "integer", "percent", "text", "throughput", "bytes", "compact"] },
+        "messageTemplate": { "description": "Interpolates {label}, {timestamp}, {total} and any stream key or sharePct field.", "type": "string", "maxLength": 300 }
+      }
+    },
+
+    "presentation": {
+      "description": "Report copy. Templates interpolate {metricKey} with the metric's formatted value; an unknown token renders as an em dash rather than failing the report.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "maxLength": 120 },
+        "kpiName": { "description": "Name of the measured quantity, used by the narrative/LLM layer.", "type": "string", "maxLength": 120 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "highlights": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "metric"],
+            "properties": {
+              "label": { "description": "May itself be a template, e.g. 'Peak {periodLabel}'.", "type": "string", "maxLength": 80 },
+              "metric": { "type": "string" },
+              "format": { "type": "string", "enum": ["number", "integer", "percent", "text", "throughput", "bytes", "compact"] },
+              "unit": { "type": "string", "maxLength": 20 },
+              "trend": { "type": "string", "enum": ["up", "down", "neutral"], "default": "neutral" }
+            }
+          }
+        },
+        "narrativeTemplate": { "type": "string", "maxLength": 4000 },
+        "narrativeLongTemplate": { "type": "string", "maxLength": 4000 },
+        "teams": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "themeColor": { "type": "string", "pattern": "^[0-9a-fA-F]{6}$" },
+            "activityTitle": { "type": "string", "maxLength": 120 },
+            "facts": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "metric"],
+                "properties": {
+                  "name": { "type": "string", "maxLength": 80 },
+                  "metric": { "type": "string" },
+                  "format": { "type": "string", "enum": ["number", "integer", "percent", "text", "throughput", "bytes", "compact"] },
+                  "unit": { "type": "string", "maxLength": 20 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "target": {
+      "description": "Optional target/threshold. Passed to the analytics layer as the capacity threshold and surfaced on the calculated result.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 20 },
+        "direction": { "description": "'max' = stay below the value; 'min' = stay above it.", "type": "string", "enum": ["max", "min"] },
+        "label": { "type": "string", "maxLength": 80 }
+      }
+    }
+  }
+}

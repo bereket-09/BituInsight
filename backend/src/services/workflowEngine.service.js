@@ -1,4 +1,4 @@
-const { getWorkflow } = require('../kpi-workflows/registry');
+const { getWorkflow, resolveWorkflow } = require('../kpi-workflows/registry');
 const { parseExcelFile } = require('./excelParser.service');
 const { generateAllCharts } = require('./chart.service');
 const { analyze } = require('../analytics');
@@ -39,7 +39,11 @@ async function buildIntelligence(workflowSlug, calculated, transformed, context 
     const primary = calculated?.timeSeries?.series?.primary;
     if (!Array.isArray(primary) || primary.length < 3) return null;
 
-    const profile = ANALYTICS_PROFILES[workflowSlug] || { unit: '', streams: null };
+    // Code workflows declare their analytics hints in the table above. A
+    // database-defined workflow carries its own on the compiled module, passed in
+    // here as context.analyticsProfile, so the intelligence layer works for it too.
+    const profile =
+      ANALYTICS_PROFILES[workflowSlug] || context.analyticsProfile || { unit: '', streams: null };
     // The workflow's own declared name wins: upstream plumbing passes the detected
     // metric *column* as context.kpiName, which for CMG is a header like "CMG name"
     // rather than the KPI it represents.
@@ -47,7 +51,7 @@ async function buildIntelligence(workflowSlug, calculated, transformed, context 
       kpiName: calculated?.metrics?.kpiName || context.kpiName || 'KPI',
       unit: context.unit || calculated?.metrics?.unit || profile.unit,
       streams: profile.streams,
-      threshold: context.threshold,
+      threshold: context.threshold ?? profile.threshold,
       rawRowCount: transformed?.records?.length,
     });
 
@@ -98,13 +102,15 @@ function resolveMetricColumn(parsed, workflowContext = {}) {
 }
 
 async function previewExcel(filePath, workflowSlug) {
-  const workflow = getWorkflow(workflowSlug);
+  // resolveWorkflow warms the definition cache on a cold instance; for a built-in
+  // code workflow it is the same lookup getWorkflow already did.
+  const workflow = await resolveWorkflow(workflowSlug);
   const { getWorkbookPreview } = require('./excelParser.service');
   return getWorkbookPreview(filePath, workflow.validator);
 }
 
 async function validateReport(workflowSlug, filePath, parseOptions = {}, workflowContext = {}) {
-  const workflow = getWorkflow(workflowSlug);
+  const workflow = await resolveWorkflow(workflowSlug);
   const options = getParseOptions(workflowSlug, parseOptions);
   const parsed = await parseExcelFile(filePath, options);
   const metricColumnName = resolveMetricColumn(parsed, workflowContext);
@@ -134,7 +140,7 @@ async function validateReport(workflowSlug, filePath, parseOptions = {}, workflo
 }
 
 async function processReport(workflowSlug, filePath, reportId, parseOptions = {}, workflowContext = {}) {
-  const workflow = getWorkflow(workflowSlug);
+  const workflow = await resolveWorkflow(workflowSlug);
   logger.info('Starting KPI workflow processing', {
     workflow: workflowSlug,
     reportId,
@@ -184,6 +190,7 @@ async function processReport(workflowSlug, filePath, reportId, parseOptions = {}
     ...workflowContext,
     kpiName: workflowContext.kpiName || metricColumnName,
     sheetName: workflowContext.sheetName || parsed.sheetName,
+    analyticsProfile: workflow.analyticsProfile,
   });
 
   if (intelligence) {
@@ -215,6 +222,7 @@ async function processReport(workflowSlug, filePath, reportId, parseOptions = {}
   const reportData = {
     transformed: {
       plmnNames: transformed.plmnNames,
+      entityNames: transformed.entityNames,
       dateRange: transformed.dateRange,
       recordCount: transformed.records.length,
     },

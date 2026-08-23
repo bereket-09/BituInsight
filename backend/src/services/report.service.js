@@ -263,7 +263,9 @@ async function sendReportToTeams(reportId, userId, webhookUrl) {
   if (!report) throw new Error('Report not found');
   if (report.status !== 'completed') throw new Error('Report is not completed');
 
-  const workflow = require('../kpi-workflows/registry').getWorkflow(report.workflow_slug);
+  // resolveWorkflow so a database-defined workflow still formats its Teams card on
+  // an instance that has not warmed the definition cache.
+  const workflow = await require('../kpi-workflows/registry').resolveWorkflow(report.workflow_slug);
   const calculated = report.report_data?.calculated || report.report_data;
   const summary = report.summary;
   const message = workflow.formatter.formatTeamsMessage(

@@ -11,6 +11,15 @@ async function start() {
     const { applyMigrations } = require('./db/migrate');
     await applyMigrations();
 
+    // Load database-defined workflows into the compiled cache before announcing
+    // the catalogue. A failure here is logged, not fatal: code workflows must keep
+    // working even if the definition table is unreadable.
+    try {
+      await require('./kpi-definitions').refresh();
+    } catch (err) {
+      logger.warn('Could not load database workflow definitions', { error: err.message });
+    }
+
     const { getAllWorkflows } = require('./kpi-workflows/registry');
     logger.info('KPI workflows loaded', {
       count: getAllWorkflows().length,

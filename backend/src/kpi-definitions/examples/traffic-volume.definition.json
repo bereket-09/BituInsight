@@ -1,0 +1,211 @@
+{
+  "schemaVersion": "1.0",
+  "slug": "traffic-volume",
+  "name": "Traffic Volume KPI",
+  "description": "Analyzes 2G/3G and 4G data volume trends, peak hours, and technology contribution percentages.",
+  "version": "1.0.0",
+  "metadata": {
+    "category": "Traffic",
+    "technology": ["2G", "3G", "4G"],
+    "reportType": "daily",
+    "icon": "activity"
+  },
+
+  "source": {
+    "headerMatch": {
+      "mode": "contains",
+      "stripParentheses": false,
+      "normalizeWhitespace": true
+    },
+    "skipFieldCodeRows": true,
+    "columns": [
+      {
+        "key": "date",
+        "label": "Date",
+        "type": "date",
+        "required": true,
+        "aliases": ["date", "datetime", "time", "period", "period start time", "period start", "start time"]
+      },
+      {
+        "key": "plmnName",
+        "label": "PLMN Name",
+        "type": "string",
+        "required": true,
+        "aliases": ["plmn name", "plmn", "plmn_name", "operator"]
+      },
+      {
+        "key": "volume2g3gRaw",
+        "label": "2G+3G data volume",
+        "type": "number",
+        "required": true,
+        "aliases": ["2g+3g data volume", "2g 3g data volume", "2g+3g volume", "datavolume_2g_3g", "2g3g volume"]
+      },
+      {
+        "key": "volume4gRaw",
+        "label": "4G data volume",
+        "type": "number",
+        "required": true,
+        "aliases": ["4g data volume", "4g volume", "datavolume_four_g", "datavolume_4g"]
+      },
+      {
+        "key": "totalVolumeRaw",
+        "label": "Total data volume",
+        "type": "number",
+        "required": true,
+        "aliases": ["total data volume", "total volume", "total", "datavolume_total"]
+      }
+    ]
+  },
+
+  "transform": {
+    "timestampField": "date",
+    "entityField": "plmnName",
+    "fields": [
+      { "name": "volume2g3g", "from": "volume2g3gRaw", "type": "number", "default": 0 },
+      { "name": "volume4g", "from": "volume4gRaw", "type": "number", "default": 0 }
+    ],
+    "derived": [
+      {
+        "name": "totalVolume",
+        "op": "coalesce",
+        "fields": ["totalVolumeRaw"],
+        "treatZeroAsMissing": true,
+        "fallback": { "op": "sum", "fields": ["volume2g3g", "volume4g"] }
+      }
+    ]
+  },
+
+  "series": {
+    "valueField": "totalVolume",
+    "aggregate": "sum",
+    "totalMode": "valueField",
+    "granularity": "auto",
+    "spanFormat": "short",
+    "includeDailyPeaks": true,
+    "splitOutputKey": "technologySplit",
+    "totalColor": "#4ADE80",
+    "totalFill": "rgba(74, 222, 128, 0.12)",
+    "streams": [
+      {
+        "key": "volume2g3g",
+        "label": "2G+3G",
+        "from": { "field": "volume2g3g" },
+        "sharePctField": "contribution2g3gPct",
+        "color": "#FF6B35",
+        "fill": "rgba(255, 107, 53, 0.12)"
+      },
+      {
+        "key": "volume4g",
+        "label": "4G",
+        "from": { "field": "volume4g" },
+        "sharePctField": "contribution4gPct",
+        "color": "#3B9EFF",
+        "fill": "rgba(59, 158, 255, 0.12)"
+      }
+    ]
+  },
+
+  "metrics": [
+    { "key": "kpiName", "op": "constant", "value": "Traffic volume", "format": "text" },
+
+    { "key": "totalVolume", "label": "Total volume", "op": "sum", "over": "records", "field": "totalVolume", "format": "bytes" },
+    { "key": "totalDailyVolume", "op": "sum", "over": "records", "field": "totalVolume", "format": "bytes" },
+    { "key": "total2g3g", "label": "2G+3G total", "op": "sum", "over": "records", "field": "volume2g3g", "format": "bytes" },
+    { "key": "total4g", "label": "4G total", "op": "sum", "over": "records", "field": "volume4g", "format": "bytes" },
+    { "key": "contribution4gPct", "label": "4G share", "op": "sharePct", "over": "records", "field": "volume4g", "ofField": "totalVolume", "format": "percent" },
+    { "key": "contribution2g3gPct", "label": "2G/3G share", "op": "sharePct", "over": "records", "field": "volume2g3g", "ofField": "totalVolume", "format": "percent" },
+
+    { "key": "peakPeriod", "op": "peakLabel", "format": "text" },
+    { "key": "peakPeriodVolume", "op": "peakValue", "field": "total", "format": "bytes" },
+    { "key": "peakHour", "op": "peakLabel", "format": "text" },
+    { "key": "peakHourVolume", "op": "peakValue", "field": "total", "format": "bytes" },
+    { "key": "minTrafficPeriod", "op": "minLabel", "format": "text" },
+    { "key": "minTrafficHour", "op": "minLabel", "format": "text" },
+    { "key": "minTrafficHourVolume", "op": "minValue", "field": "total", "format": "bytes" },
+
+    { "key": "recordCount", "op": "builtin", "ref": "recordCount", "format": "integer" },
+    { "key": "plmnCount", "op": "countDistinct", "over": "records", "field": "plmnName", "format": "integer" },
+    { "key": "timeGranularity", "op": "builtin", "ref": "granularityLabel", "format": "text" },
+    { "key": "timeSpan", "op": "builtin", "ref": "spanLabel", "format": "text" },
+    { "key": "dataPoints", "op": "builtin", "ref": "pointCount", "format": "integer" },
+    { "key": "periodLabel", "op": "builtin", "ref": "periodLabel", "format": "text" }
+  ],
+
+  "charts": [
+    {
+      "id": "traffic-volume-lines",
+      "type": "line",
+      "title": "Traffic Volume by Technology",
+      "description": "2G+3G, 4G, and Total — multi-series line chart",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [{ "field": "volume2g3g" }, { "field": "volume4g" }, { "field": "total" }]
+    },
+    {
+      "id": "traffic-stacked-area",
+      "type": "area",
+      "title": "Stacked Volume",
+      "description": "2G+3G and 4G stacked over time",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [
+        { "field": "volume2g3g", "fill": "rgba(255, 107, 53, 0.45)", "stack": "volume", "fillArea": true },
+        { "field": "volume4g", "fill": "rgba(59, 158, 255, 0.45)", "stack": "volume", "fillArea": true }
+      ]
+    },
+    {
+      "id": "technology-pie",
+      "type": "doughnut",
+      "title": "Technology Contribution (Total Period)",
+      "description": "Overall 2G/3G vs 4G split",
+      "source": "split"
+    },
+    {
+      "id": "contribution-trend",
+      "type": "line",
+      "title": "4G Share % Over Time",
+      "description": "4G percentage trend across the report period",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [{ "field": "contribution4gPct", "label": "4G %", "color": "#00D4AA", "fill": "rgba(0, 212, 170, 0.08)", "fillArea": true }]
+    }
+  ],
+
+  "anomalies": {
+    "method": "stddev",
+    "sigma": 2,
+    "direction": "above",
+    "minPoints": 3,
+    "field": "total",
+    "type": "spike",
+    "format": "bytes",
+    "messageTemplate": "Traffic spike at {label}: {total}"
+  },
+
+  "presentation": {
+    "title": "Traffic Volume KPI Report",
+    "kpiName": "Traffic volume",
+    "subtitle": "2G/3G and 4G data volume, split by technology",
+    "highlights": [
+      { "label": "Time span", "metric": "timeSpan", "format": "text", "trend": "neutral" },
+      { "label": "Granularity", "metric": "timeGranularity", "format": "text", "trend": "neutral" },
+      { "label": "Total volume", "metric": "totalVolume", "format": "bytes", "trend": "neutral" },
+      { "label": "4G share", "metric": "contribution4gPct", "format": "percent", "trend": "up" },
+      { "label": "Peak {periodLabel}", "metric": "peakPeriod", "format": "text", "trend": "up" },
+      { "label": "Peak volume", "metric": "peakPeriodVolume", "format": "bytes", "trend": "up" },
+      { "label": "Data points", "metric": "recordCount", "format": "integer", "trend": "neutral" }
+    ],
+    "narrativeTemplate": "Analyzed {recordCount} records ({timeGranularity} resolution) over {timeSpan}. Total volume {totalVolume} — 4G {contribution4gPct}, 2G/3G {contribution2g3gPct}. Peak at {peakPeriod} ({peakPeriodVolume}).",
+    "teams": {
+      "themeColor": "00B140",
+      "activityTitle": "📊 Traffic Volume KPI",
+      "facts": [
+        { "name": "Total volume", "metric": "totalVolume", "format": "bytes" },
+        { "name": "4G share", "metric": "contribution4gPct", "format": "percent" },
+        { "name": "2G/3G share", "metric": "contribution2g3gPct", "format": "percent" },
+        { "name": "Peak period", "metric": "peakPeriod", "format": "text" },
+        { "name": "Records", "metric": "recordCount", "format": "integer" }
+      ]
+    }
+  }
+}

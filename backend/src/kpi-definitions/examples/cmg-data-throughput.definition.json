@@ -1,0 +1,536 @@
+{
+  "schemaVersion": "1.0",
+  "slug": "cmg-data-throughput",
+  "name": "CMG Data Throughput",
+  "description": "Measures combined CMG downlink + uplink capacity (Gbps), split by MDC1 and MDC2, summed per time period from PGW export data.",
+  "version": "1.0.0",
+  "metadata": {
+    "category": "Throughput",
+    "technology": [
+      "CMG",
+      "PGW"
+    ],
+    "reportType": "periodic",
+    "icon": "activity",
+    "unit": "Gbps"
+  },
+  "source": {
+    "sheet": {
+      "namePatterns": [
+        "data for",
+        "throughput",
+        "cmg",
+        "ulpackets",
+        "dlpackets"
+      ],
+      "headerRowIndex": 0,
+      "dataStartRowIndex": 2
+    },
+    "headerMatch": {
+      "mode": "loose",
+      "stripParentheses": true,
+      "normalizeWhitespace": true
+    },
+    "skipFieldCodeRows": true,
+    "columns": [
+      {
+        "key": "period",
+        "label": "Period start time",
+        "type": "date",
+        "required": true,
+        "aliases": [
+          "period start time",
+          "period start",
+          "start time",
+          "time period",
+          "date",
+          "datetime"
+        ]
+      },
+      {
+        "key": "samName",
+        "label": "SAM name",
+        "type": "string",
+        "required": false,
+        "aliases": [
+          "sam name",
+          "sam",
+          "sam_name"
+        ]
+      },
+      {
+        "key": "cmgName",
+        "label": "CMG name",
+        "type": "string",
+        "required": true,
+        "aliases": [
+          "cmg name",
+          "cmg",
+          "cmg_name"
+        ]
+      },
+      {
+        "key": "dlMbps",
+        "label": "DL max Mbps",
+        "type": "number",
+        "required": true,
+        "aliases": [
+          "dlmaxmbps",
+          "dl max mbps",
+          "dlmax mbps",
+          "dl throughput"
+        ]
+      },
+      {
+        "key": "ulMbps",
+        "label": "UL max Mbps",
+        "type": "number",
+        "required": true,
+        "aliases": [
+          "ulmaxmbps",
+          "ul max mbps",
+          "ulmax mbps",
+          "ul throughput"
+        ]
+      }
+    ]
+  },
+  "transform": {
+    "timestampField": "period",
+    "entityField": "samName",
+    "derived": [
+      {
+        "name": "cmgNode",
+        "op": "classify",
+        "field": "cmgName",
+        "caseInsensitive": true,
+        "dropRowIfNull": true,
+        "rules": [
+          {
+            "match": "contains",
+            "text": "MDC1",
+            "value": "MDC1"
+          },
+          {
+            "match": "contains",
+            "text": "MDC2",
+            "value": "MDC2"
+          }
+        ],
+        "unclassifiedMessage": "Could not detect MDC1 or MDC2 from CMG name column. Expected values like …@MDC1-NK-CMG-CP01"
+      },
+      {
+        "name": "throughputGbps",
+        "op": "sum",
+        "fields": [
+          "dlMbps",
+          "ulMbps"
+        ],
+        "divisor": 1000
+      }
+    ]
+  },
+  "series": {
+    "valueField": "throughputGbps",
+    "aggregate": "sum",
+    "totalMode": "streams",
+    "granularity": "auto",
+    "granularityLabels": {
+      "subhourly": "15-minute"
+    },
+    "spanFormat": "numeric",
+    "includeDailyPeaks": true,
+    "splitOutputKey": "nodeSplit",
+    "totalColor": "#4ADE80",
+    "totalFill": "rgba(74, 222, 128, 0.12)",
+    "streams": [
+      {
+        "key": "mdc1",
+        "label": "MDC1",
+        "from": {
+          "field": "cmgNode",
+          "equals": "MDC1"
+        },
+        "sharePctField": "mdc1SharePct",
+        "color": "#3B9EFF",
+        "fill": "rgba(59, 158, 255, 0.15)"
+      },
+      {
+        "key": "mdc2",
+        "label": "MDC2",
+        "from": {
+          "field": "cmgNode",
+          "equals": "MDC2"
+        },
+        "sharePctField": "mdc2SharePct",
+        "color": "#FF6B35",
+        "fill": "rgba(255, 107, 53, 0.15)"
+      }
+    ]
+  },
+  "metrics": [
+    {
+      "key": "kpiName",
+      "op": "constant",
+      "value": "Data throughput",
+      "format": "text"
+    },
+    {
+      "key": "valueType",
+      "op": "constant",
+      "value": "throughput",
+      "format": "text"
+    },
+    {
+      "key": "unit",
+      "op": "constant",
+      "value": "Gbps",
+      "format": "text"
+    },
+    {
+      "key": "totalThroughputGbps",
+      "label": "Total throughput",
+      "op": "sum",
+      "fields": [
+        "mdc1",
+        "mdc2"
+      ],
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "totalMdc1Gbps",
+      "label": "MDC1 total",
+      "op": "sum",
+      "field": "mdc1",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "totalMdc2Gbps",
+      "label": "MDC2 total",
+      "op": "sum",
+      "field": "mdc2",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "mdc1SharePct",
+      "label": "MDC1 share",
+      "op": "sharePct",
+      "field": "mdc1",
+      "ofField": "total",
+      "format": "percent"
+    },
+    {
+      "key": "mdc2SharePct",
+      "label": "MDC2 share",
+      "op": "sharePct",
+      "field": "mdc2",
+      "ofField": "total",
+      "format": "percent"
+    },
+    {
+      "key": "latestPeriod",
+      "op": "latestLabel",
+      "format": "text"
+    },
+    {
+      "key": "latestTotalGbps",
+      "op": "latestValue",
+      "field": "total",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "latestMdc1Gbps",
+      "op": "latestValue",
+      "field": "mdc1",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "latestMdc2Gbps",
+      "op": "latestValue",
+      "field": "mdc2",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "averagePeriodGbps",
+      "op": "avg",
+      "field": "total",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "peakPeriod",
+      "op": "peakLabel",
+      "format": "text"
+    },
+    {
+      "key": "peakPeriodGbps",
+      "op": "peakValue",
+      "field": "total",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "peakPeriodMdc1",
+      "op": "peakValue",
+      "field": "mdc1",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "peakPeriodMdc2",
+      "op": "peakValue",
+      "field": "mdc2",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "minPeriod",
+      "op": "minLabel",
+      "format": "text"
+    },
+    {
+      "key": "minPeriodGbps",
+      "op": "minValue",
+      "field": "total",
+      "format": "throughput",
+      "unit": "Gbps"
+    },
+    {
+      "key": "periodCount",
+      "op": "builtin",
+      "ref": "pointCount",
+      "format": "integer"
+    },
+    {
+      "key": "dayCount",
+      "op": "builtin",
+      "ref": "dayCount",
+      "format": "integer"
+    },
+    {
+      "key": "rawRowCount",
+      "op": "builtin",
+      "ref": "recordCount",
+      "format": "integer"
+    },
+    {
+      "key": "samCount",
+      "op": "countDistinct",
+      "over": "records",
+      "field": "samName",
+      "format": "integer"
+    },
+    {
+      "key": "timeGranularity",
+      "op": "builtin",
+      "ref": "granularityLabel",
+      "format": "text"
+    },
+    {
+      "key": "timeSpan",
+      "op": "builtin",
+      "ref": "spanLabel",
+      "format": "text"
+    },
+    {
+      "key": "periodLabel",
+      "op": "builtin",
+      "ref": "periodLabel",
+      "format": "text",
+      "internal": true
+    }
+  ],
+  "charts": [
+    {
+      "id": "cmg-throughput-lines",
+      "type": "line",
+      "title": "Data throughput — MDC1 & MDC2",
+      "description": "MDC1 vs MDC2 aggregated Gbps per period",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [
+        {
+          "field": "mdc1"
+        },
+        {
+          "field": "mdc2"
+        },
+        {
+          "field": "total"
+        }
+      ]
+    },
+    {
+      "id": "cmg-throughput-stacked",
+      "type": "area",
+      "title": "Stacked throughput",
+      "description": "MDC1 and MDC2 stacked over time",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [
+        {
+          "field": "mdc1",
+          "fill": "rgba(59, 158, 255, 0.45)",
+          "stack": "tp",
+          "fillArea": true
+        },
+        {
+          "field": "mdc2",
+          "fill": "rgba(255, 107, 53, 0.45)",
+          "stack": "tp",
+          "fillArea": true
+        }
+      ]
+    },
+    {
+      "id": "cmg-node-split",
+      "type": "doughnut",
+      "title": "MDC1 vs MDC2 (aggregated)",
+      "description": "Share of total throughput per CMG node",
+      "source": "split"
+    },
+    {
+      "id": "cmg-total-trend",
+      "type": "line",
+      "title": "Combined throughput",
+      "appendGranularity": true,
+      "source": "series",
+      "series": [
+        {
+          "field": "total",
+          "label": "Total Gbps",
+          "fillArea": true
+        }
+      ]
+    }
+  ],
+  "anomalies": {
+    "method": "stddev",
+    "sigma": 2,
+    "direction": "above",
+    "minPoints": 4,
+    "field": "total",
+    "type": "spike",
+    "format": "throughput",
+    "messageTemplate": "Throughput spike at {label}: {total} (MDC1 {mdc1}, MDC2 {mdc2})"
+  },
+  "presentation": {
+    "title": "CMG Data Throughput KPI Report",
+    "kpiName": "Data throughput",
+    "subtitle": "Combined downlink + uplink CMG capacity, grouped by MDC1 and MDC2",
+    "highlights": [
+      {
+        "label": "Time span",
+        "metric": "timeSpan",
+        "format": "text",
+        "trend": "neutral"
+      },
+      {
+        "label": "Periods",
+        "metric": "periodCount",
+        "format": "integer",
+        "trend": "neutral"
+      },
+      {
+        "label": "Raw rows",
+        "metric": "rawRowCount",
+        "format": "integer",
+        "trend": "neutral"
+      },
+      {
+        "label": "Total throughput",
+        "metric": "totalThroughputGbps",
+        "trend": "neutral"
+      },
+      {
+        "label": "MDC1 total",
+        "metric": "totalMdc1Gbps",
+        "trend": "neutral"
+      },
+      {
+        "label": "MDC2 total",
+        "metric": "totalMdc2Gbps",
+        "trend": "neutral"
+      },
+      {
+        "label": "MDC1 share",
+        "metric": "mdc1SharePct",
+        "format": "percent",
+        "trend": "up"
+      },
+      {
+        "label": "Latest period",
+        "metric": "latestPeriod",
+        "format": "text",
+        "trend": "neutral"
+      },
+      {
+        "label": "Latest total",
+        "metric": "latestTotalGbps",
+        "trend": "up"
+      },
+      {
+        "label": "Peak {periodLabel}",
+        "metric": "peakPeriod",
+        "format": "text",
+        "trend": "up"
+      },
+      {
+        "label": "Peak throughput",
+        "metric": "peakPeriodGbps",
+        "trend": "up"
+      }
+    ],
+    "narrativeTemplate": "{periodCount} periods · {totalThroughputGbps} combined (MDC1 {totalMdc1Gbps}, MDC2 {totalMdc2Gbps}). Latest {latestPeriod}: {latestTotalGbps}.",
+    "narrativeLongTemplate": "This report sums CMG downlink and uplink max rates into Gbps, split across MDC1 and MDC2 for each time period. Coverage: {timeSpan} ({periodCount} buckets, {timeGranularity} resolution). Totals — MDC1 {totalMdc1Gbps}, MDC2 {totalMdc2Gbps}, combined {totalThroughputGbps}. Peak at {peakPeriod}: {peakPeriodGbps}.",
+    "teams": {
+      "themeColor": "00B140",
+      "activityTitle": "📊 CMG Data Throughput KPI",
+      "facts": [
+        {
+          "name": "Total throughput",
+          "metric": "totalThroughputGbps"
+        },
+        {
+          "name": "MDC1",
+          "metric": "totalMdc1Gbps"
+        },
+        {
+          "name": "MDC2",
+          "metric": "totalMdc2Gbps"
+        },
+        {
+          "name": "MDC1 share",
+          "metric": "mdc1SharePct",
+          "format": "percent"
+        },
+        {
+          "name": "Time span",
+          "metric": "timeSpan",
+          "format": "text"
+        },
+        {
+          "name": "Periods",
+          "metric": "periodCount",
+          "format": "integer"
+        },
+        {
+          "name": "Peak period",
+          "metric": "peakPeriod",
+          "format": "text"
+        },
+        {
+          "name": "Raw CMG rows",
+          "metric": "rawRowCount",
+          "format": "integer"
+        }
+      ]
+    }
+  }
+}

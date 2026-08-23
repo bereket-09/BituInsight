@@ -7,10 +7,12 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node src/db/seed.js",
-    "db:setup": "node src/db/bootstrap.js"
+    "db:setup": "node src/db/bootstrap.js",
+    "mcp": "node src/mcp/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@napi-rs/canvas": "^1.0.5",
     "bcryptjs": "^2.4.3",
     "chart.js": "^4.4.8",
@@ -25,7 +27,8 @@
     "pg": "^8.13.1",
     "pptxgenjs": "^4.0.1",
     "uuid": "^11.0.5",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=20.0.0"
