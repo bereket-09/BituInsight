@@ -1,7 +1,7 @@
 const SERIES_COLORS = {
   volume2g3g: { line: '#FF6B35', fill: 'rgba(255, 107, 53, 0.12)', label: '2G+3G' },
   volume4g: { line: '#3B9EFF', fill: 'rgba(59, 158, 255, 0.12)', label: '4G' },
-  total: { line: '#B794F6', fill: 'rgba(183, 148, 246, 0.12)', label: 'Total' },
+  total: { line: '#4ADE80', fill: 'rgba(74, 222, 128, 0.12)', label: 'Total' },
   contribution4g: { line: '#00D4AA', fill: 'rgba(0, 212, 170, 0.08)', label: '4G %' },
 };
 

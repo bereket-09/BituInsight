@@ -5,12 +5,12 @@ import { useAuth } from '../context/AuthContext';
 export default function Settings() {
   const { user } = useAuth();
   const [teamsWebhook, setTeamsWebhook] = useState(
-    () => localStorage.getItem('bituinsight_teams_webhook') || ''
+    () => localStorage.getItem('coreinsight_teams_webhook') || ''
   );
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
-    localStorage.setItem('bituinsight_teams_webhook', teamsWebhook);
+    localStorage.setItem('coreinsight_teams_webhook', teamsWebhook);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

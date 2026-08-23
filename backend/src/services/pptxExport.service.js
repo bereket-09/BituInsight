@@ -22,7 +22,7 @@ function createTheme(themeId = 'dark') {
   return {
     id: light ? 'light' : 'dark',
     isLight: light,
-    purple: '632CA6',
+    purple: '00B140',
     purpleLight: '8B5CF6',
     accent: '3B9EFF',
     green: '22C55E',
@@ -33,7 +33,7 @@ function createTheme(themeId = 'dark') {
     text: light ? '0F172A' : 'E6EDF3',
     textSoft: light ? '475569' : '8B949E',
     border: light ? 'E2E8F0' : '30363D',
-    tableHeader: '632CA6',
+    tableHeader: '00B140',
     tableHeaderText: 'FFFFFF',
     rowEven: light ? 'FFFFFF' : '161B22',
     rowOdd: light ? 'F8FAFC' : '1C2128',
@@ -45,9 +45,9 @@ function createTheme(themeId = 'dark') {
     statusVolumeText: light ? '0369A1' : '3B9EFF',
     chartFrame: '0D1117',
     coverGradient: light ? 'EEF2FF' : '0D1117',
-    footerBar: '632CA6',
+    footerBar: '00B140',
     footerText: 'FFFFFF',
-    closingBg: '632CA6',
+    closingBg: '00B140',
     closingText: 'FFFFFF',
   };
 }
@@ -314,7 +314,7 @@ function addBrandFooter(slide, pptx, T, pageNum, totalPages) {
     h: LAYOUT.footerH,
     fill: { color: T.footerBar },
   });
-  slide.addText('BituInsight · Telecom KPI Executive Report', {
+  slide.addText('Core Insight · Telecom KPI Executive Report', {
     x: 0.45,
     y: LAYOUT.footerY + 0.1,
     w: 6,
@@ -391,7 +391,7 @@ function addCoverSlide(pptx, workbook, kpiSlides, T) {
     fill: { color: T.purpleLight },
   });
 
-  slide.addText('BITUINSIGHT', {
+  slide.addText('CORE INSIGHT', {
     x: 1,
     y: 0.62,
     w: 4,
@@ -901,7 +901,7 @@ function addClosingSlide(pptx, T, pageNum, totalPages) {
     color: T.closingText,
     align: 'center',
   });
-  slide.addText('BituInsight · Management KPI Reporting', {
+  slide.addText('Core Insight · Management KPI Reporting', {
     x: 0,
     y: 3.85,
     w: '100%',
@@ -971,7 +971,7 @@ async function buildDeck(workbook, kpiSlides, deckDefaultThreshold, themeId, T) 
 
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = 'BituInsight';
+  pptx.author = 'Core Insight';
   pptx.title = `KPI Report — ${workbook.original_filename}`;
   pptx.subject = 'Weekly executive KPI deck';
 
@@ -1000,7 +1000,7 @@ async function buildDeck(workbook, kpiSlides, deckDefaultThreshold, themeId, T) 
   const safeName = (workbook.original_filename || 'workbook')
     .replace(/\.[^.]+$/, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '_');
-  const fileName = `BituInsight_KPI_Report${themeSuffix}_${safeName}_${Date.now()}.pptx`;
+  const fileName = `Core Insight_KPI_Report${themeSuffix}_${safeName}_${Date.now()}.pptx`;
 
   const buffer = await pptx.write({ outputType: 'nodebuffer' });
   return { buffer, fileName, slideCount: totalPages, theme: themeId };

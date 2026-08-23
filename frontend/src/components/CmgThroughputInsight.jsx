@@ -102,7 +102,7 @@ function SnapshotTile({ label, value, sub, accent }) {
         accent && 'border-l-2',
         accent === 'mdc1' && 'border-l-[#3B9EFF]',
         accent === 'mdc2' && 'border-l-[#FF6B35]',
-        accent === 'total' && 'border-l-[#B794F6]'
+        accent === 'total' && 'border-l-[#4ADE80]'
       )}
     >
       <p className="text-[10px] font-medium uppercase tracking-wider text-noc-muted">{label}</p>
@@ -162,7 +162,7 @@ export default function CmgThroughputInsight({
               </p>
             </div>
           </div>
-          <span className="rounded-full border border-[#B794F6]/30 bg-[#B794F6]/10 px-3 py-1 text-xs font-medium text-[#B794F6]">
+          <span className="rounded-full border border-[#4ADE80]/30 bg-[#4ADE80]/10 px-3 py-1 text-xs font-medium text-[#4ADE80]">
             Unit: Gbps
           </span>
         </div>

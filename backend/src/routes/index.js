@@ -10,7 +10,7 @@ const { upload } = require('../middleware/upload.middleware');
 const router = Router();
 
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'bituinsight-api', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'core-insight-api', timestamp: new Date().toISOString() });
 });
 
 router.post('/auth/login', authController.loginValidation, authController.login);

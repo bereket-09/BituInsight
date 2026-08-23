@@ -191,7 +191,7 @@ export default function CmgThroughputExplorer({ timeSeries, summary = {}, calcul
       <span className="text-noc-muted">{viewPeak.label}</span>
       <span className="font-mono text-[#3B9EFF]">MDC1 {formatGbps(viewPeak.mdc1)}</span>
       <span className="font-mono text-[#FF6B35]">MDC2 {formatGbps(viewPeak.mdc2)}</span>
-      <span className="font-mono font-semibold text-[#B794F6]">Total {formatGbps(viewPeak.total)}</span>
+      <span className="font-mono font-semibold text-[#4ADE80]">Total {formatGbps(viewPeak.total)}</span>
     </div>
   );
 

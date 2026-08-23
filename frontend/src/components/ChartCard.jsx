@@ -20,7 +20,7 @@ import { Maximize2 } from 'lucide-react';
 import { useChartTheme } from '../hooks/useChartTheme';
 import ChartFullscreenModal from './ChartFullscreenModal';
 
-const PIE_COLORS = ['#FF6B35', '#3B9EFF', '#B794F6', '#00D4AA'];
+const PIE_COLORS = ['#FF6B35', '#3B9EFF', '#4ADE80', '#00D4AA'];
 
 /** Pie slice share — do not round to whole % (e.g. 50.73%, not 51%). */
 function formatPieSharePercent(value, total) {

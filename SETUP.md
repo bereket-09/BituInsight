@@ -1,11 +1,11 @@
-# BituInsight — Setup Guide
+# Core Insight — Setup Guide
 
-> **Already deployed:** <https://bituinsight.vercel.app> — sign in with
-> `admin@bituinsight.local` / `admin123`. Follow this guide only if you want to run
+> **Already deployed:** <https://coreinsight.vercel.app> — sign in with
+> `admin@coreinsight.local` / `admin123`. Follow this guide only if you want to run
 > your own copy. **Change that password before real data goes in** (see
 > [Security](#security-important)).
 
-A step-by-step guide to getting BituInsight running. **No prior experience assumed.**
+A step-by-step guide to getting Core Insight running. **No prior experience assumed.**
 If you can copy and paste, you can complete this.
 
 Pick one of the three paths below:
@@ -38,11 +38,11 @@ Then close and reopen your terminal, and run the check again.
 ### Get the code
 
 ```bash
-git clone https://github.com/bereket-09/BituInsight.git
-cd BituInsight
+git clone https://github.com/bereket-09/CoreInsight.git
+cd CoreInsight
 ```
 
-Every command in this guide assumes you are inside the `BituInsight` folder.
+Every command in this guide assumes you are inside the `CoreInsight` folder.
 
 ---
 
@@ -68,14 +68,14 @@ docker compose up --build
 
 The first run takes 5–10 minutes (it downloads everything it needs). You'll know
 it's ready when the text stops scrolling and you see lines mentioning
-`bituinsight-api` and `bituinsight-web`.
+`core-insight-api` and `core-insight-web`.
 
 **4. Open the app:** go to <http://localhost:3000> in your browser.
 
 | | |
 |---|---|
 | Website | http://localhost:3000 |
-| Email | `admin@bituinsight.local` |
+| Email | `admin@coreinsight.local` |
 | Password | `admin123` |
 
 **To stop it:** press `Ctrl + C` in the terminal, then run `docker compose down`.
@@ -149,7 +149,7 @@ Start the backend and **leave this terminal open**:
 npm start
 ```
 
-You should see `BituInsight API running on port 4000`.
+You should see `Core Insight API running on port 4000`.
 
 ### 4. Start the website
 
@@ -157,12 +157,12 @@ Open a **second** terminal window (`Cmd + T` on Mac, or a new PowerShell window)
 go back to the project folder, and run:
 
 ```bash
-cd BituInsight/frontend
+cd CoreInsight/frontend
 npm install
 npm run dev
 ```
 
-Open <http://localhost:3000> and log in with `admin@bituinsight.local` / `admin123`.
+Open <http://localhost:3000> and log in with `admin@coreinsight.local` / `admin123`.
 
 **To stop:** press `Ctrl + C` in both terminal windows.
 
@@ -267,7 +267,7 @@ columns or delete header rows first.
 The system ships with a well-known default password. **Before anyone outside your
 team can reach the app**, change it:
 
-1. Log in as `admin@bituinsight.local`.
+1. Log in as `admin@coreinsight.local`.
 2. Open a terminal in the project and run:
 
 ```bash
@@ -277,7 +277,7 @@ const bcrypt = require('bcryptjs');
 const pool = require('./src/db/pool');
 const newPassword = 'CHANGE-THIS-TO-YOUR-PASSWORD';
 bcrypt.hash(newPassword, 10)
-  .then(h => pool.query('UPDATE users SET password_hash=\$1 WHERE email=\$2', [h, 'admin@bituinsight.local']))
+  .then(h => pool.query('UPDATE users SET password_hash=\$1 WHERE email=\$2', [h, 'admin@coreinsight.local']))
   .then(() => { console.log('Password updated'); return pool.end(); });
 "
 ```
@@ -327,4 +327,4 @@ than piling up new ones, and images older than `CHART_RETENTION_DAYS` (default 9
 are cleared automatically while the report itself is kept.
 
 Still stuck? Open an issue at
-<https://github.com/bereket-09/BituInsight/issues> and paste the red error text.
+<https://github.com/bereket-09/CoreInsight/issues> and paste the red error text.

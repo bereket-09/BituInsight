@@ -18,7 +18,7 @@ async function start() {
     });
 
     app.listen(config.port, () => {
-      logger.info(`BituInsight API running on port ${config.port}`, {
+      logger.info(`Core Insight API running on port ${config.port}`, {
         env: config.env,
       });
     });

@@ -10,7 +10,7 @@ function formatTeamsMessage(summary, calculated, reportId) {
   return {
     '@type': 'MessageCard',
     '@context': 'http://schema.org/extensions',
-    themeColor: '632CA6',
+    themeColor: '00B140',
     summary: summary.title,
     sections: [
       {

@@ -21,9 +21,9 @@ const WORKFLOW_STYLES = {
   },
   'cmg-data-throughput': {
     icon: Zap,
-    gradient: 'from-[#B794F6]/20 via-[#B794F6]/5 to-transparent',
-    ring: 'ring-[#B794F6]/50',
-    accent: '#B794F6',
+    gradient: 'from-[#4ADE80]/20 via-[#4ADE80]/5 to-transparent',
+    ring: 'ring-[#4ADE80]/50',
+    accent: '#4ADE80',
     category: 'Throughput',
     tagline: 'MDC1 & MDC2 Gbps capacity',
   },
@@ -43,7 +43,7 @@ function getWorkflowStyle(slug) {
       icon: Activity,
       gradient: 'from-noc-accent/20 via-noc-accent/5 to-transparent',
       ring: 'ring-noc-accent/50',
-      accent: '#632CA6',
+      accent: '#00B140',
       category: 'KPI',
       tagline: 'Telecom analytics',
     }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-const COLLAPSED_KEY = 'bituinsight_sidebar_collapsed';
+const COLLAPSED_KEY = 'coreinsight_sidebar_collapsed';
 
 const SidebarContext = createContext(null);
 

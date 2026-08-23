@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run BituInsight without building app images (only Postgres in Docker).
+# Run Core Insight without building app images (only Postgres in Docker).
 # Use when `docker-compose up --build` fails to pull from Docker Hub.
 
 set -euo pipefail
@@ -10,11 +10,11 @@ echo "Starting PostgreSQL only..."
 docker compose up postgres -d
 
 echo "Waiting for Postgres..."
-until docker compose exec -T postgres pg_isready -U bituinsight >/dev/null 2>&1; do
+until docker compose exec -T postgres pg_isready -U coreinsight >/dev/null 2>&1; do
   sleep 1
 done
 
-export DATABASE_URL="${DATABASE_URL:-postgres://bituinsight:bituinsight_secret@localhost:5432/bituinsight}"
+export DATABASE_URL="${DATABASE_URL:-postgres://coreinsight:coreinsight_secret@localhost:5432/coreinsight}"
 export JWT_SECRET="${JWT_SECRET:-dev-secret-change-in-production}"
 export CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3000}"
 export UPLOAD_DIR="${UPLOAD_DIR:-$ROOT/backend/uploads}"
@@ -43,9 +43,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo ""
-echo "BituInsight (local mode)"
+echo "Core Insight (local mode)"
 echo "  Portal: http://localhost:3000"
 echo "  API:    http://localhost:4000/api"
-echo "  Login:  admin@bituinsight.local / admin123"
+echo "  Login:  admin@coreinsight.local / admin123"
 echo "Press Ctrl+C to stop."
 wait

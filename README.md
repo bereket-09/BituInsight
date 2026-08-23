@@ -1,4 +1,4 @@
-# BituInsight — Telecom KPI Analytics Platform
+# Core Insight — Telecom KPI Analytics Platform
 
 Production-grade telecom KPI workflow engine for Excel report ingestion, KPI-specific transformations, graph generation, reporting, and Microsoft Teams integration.
 
@@ -73,7 +73,7 @@ chmod +x scripts/start-local.sh
 | API       | http://localhost:4000/api  |
 | PostgreSQL| localhost:5432             |
 
-**Default login:** `admin@bituinsight.local` / `admin123`
+**Default login:** `admin@coreinsight.local` / `admin123`
 
 ## Architecture
 
@@ -206,4 +206,4 @@ npm run dev
 
 ## License
 
-Proprietary — BituInsight Telecom KPI Platform
+Proprietary — Core Insight Telecom KPI Platform

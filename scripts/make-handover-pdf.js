@@ -1,10 +1,10 @@
-/* Generate the BituInsight client handover PDF. */
+/* Generate the Core Insight client handover PDF. */
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 
-const OUT = '/Users/infradev/Documents/Source-codes/BituInsight/BituInsight-Handover.pdf';
+const OUT = '/Users/infradev/Documents/Source-codes/BituInsight/CoreInsight-Handover.pdf';
 
-const ACCENT = '#632CA6';
+const ACCENT = '#00B140';
 const INK = '#1A1A2E';
 const MUTED = '#5B6478';
 const LINE = '#D8DBE4';
@@ -17,8 +17,8 @@ const doc = new PDFDocument({
   size: 'A4',
   margins: { top: 54, bottom: 62, left: M, right: M },
   info: {
-    Title: 'BituInsight — Client Handover',
-    Author: 'BituInsight',
+    Title: 'Core Insight — Client Handover',
+    Author: 'Core Insight',
     Subject: 'Platform handover: overview, access details, and credentials',
   },
 });
@@ -45,7 +45,7 @@ function chrome() {
     .fillColor(MUTED)
     .font('Helvetica')
     .fontSize(8)
-    .text('BituInsight — Client Handover', M, height - 36, {
+    .text('Core Insight — Client Handover', M, height - 36, {
       width: W,
       align: 'left',
       lineBreak: false,
@@ -159,7 +159,7 @@ function callout(title, text) {
 
 // ---------------------------------------------------------------- content ---
 
-doc.fillColor(INK).font('Helvetica-Bold').fontSize(26).text('BituInsight', M, 68);
+doc.fillColor(INK).font('Helvetica-Bold').fontSize(26).text('Core Insight', M, 68);
 doc
   .fillColor(MUTED)
   .font('Helvetica')
@@ -169,7 +169,7 @@ rule();
 
 h2('What this platform does');
 body(
-  'BituInsight turns raw NetAct KPI exports into reviewed reports. You upload the Excel ' +
+  'Core Insight turns raw NetAct KPI exports into reviewed reports. You upload the Excel ' +
     'file exactly as NetAct produces it; the platform validates its structure, computes the ' +
     'KPI, analyses the result statistically, and produces a written summary alongside ' +
     'interactive charts and exports.'
@@ -189,15 +189,15 @@ body(
 
 h2('Access details');
 kvTable([
-  ['Live application', 'https://bituinsight.vercel.app'],
-  ['Source code', 'github.com/bereket-09/BituInsight'],
+  ['Live application', 'https://coreinsight.vercel.app'],
+  ['Source code', 'github.com/bereket-09/CoreInsight'],
   ['Repository owner', 'bereket-09 — private repository, access granted on request'],
   ['Setup guide', 'SETUP.md, in the repository root'],
 ]);
 
 h2('Sign-in credentials');
 kvTable([
-  ['Username', 'admin@bituinsight.local', true],
+  ['Username', 'admin@coreinsight.local', true],
   ['Password', 'admin123', true],
 ]);
 
@@ -243,7 +243,7 @@ doc
   .font('Helvetica')
   .fontSize(8.5)
   .text(
-    'Questions or issues: open an issue at github.com/bereket-09/BituInsight/issues, or contact the project maintainer.',
+    'Questions or issues: open an issue at github.com/bereket-09/CoreInsight/issues, or contact the project maintainer.',
     M,
     doc.y,
     { width: W, lineGap: 2 }

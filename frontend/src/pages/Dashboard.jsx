@@ -68,7 +68,7 @@ export default function Dashboard() {
               Telecom KPI Command Center
             </div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              BituInsight
+              Core Insight
               <span className="block text-lg font-normal text-noc-muted sm:inline sm:ml-2 sm:text-xl">
                 Operations Dashboard
               </span>

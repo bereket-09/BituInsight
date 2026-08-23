@@ -8,7 +8,7 @@ const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  defaultMeta: { service: 'bituinsight-api' },
+  defaultMeta: { service: 'core-insight-api' },
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(

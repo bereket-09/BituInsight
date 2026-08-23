@@ -8,7 +8,7 @@ const client = axios.create({
 });
 
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('bituinsight_token');
+  const token = localStorage.getItem('coreinsight_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -19,8 +19,8 @@ client.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('bituinsight_token');
-      localStorage.removeItem('bituinsight_user');
+      localStorage.removeItem('coreinsight_token');
+      localStorage.removeItem('coreinsight_user');
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }

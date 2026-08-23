@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { LayoutGrid, PanelLeft, LayoutList, Search } from 'lucide-react';
 import clsx from 'clsx';
 
-const NAV_MODE_KEY = 'bituinsight_kpi_nav_mode';
+const NAV_MODE_KEY = 'coreinsight_kpi_nav_mode';
 
 function KpiStatusDot({ status }) {
   return (

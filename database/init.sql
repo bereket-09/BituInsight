@@ -1,4 +1,4 @@
--- BituInsight Telecom KPI Analytics Platform
+-- Core Insight Telecom KPI Analytics Platform
 -- PostgreSQL Schema
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

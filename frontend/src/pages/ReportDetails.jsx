@@ -28,7 +28,7 @@ export default function ReportDetails() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [teamsUrl, setTeamsUrl] = useState(
-    () => localStorage.getItem('bituinsight_teams_webhook') || ''
+    () => localStorage.getItem('coreinsight_teams_webhook') || ''
   );
   const [teamsMessage, setTeamsMessage] = useState('');
   const [pngPreview, setPngPreview] = useState(null);
@@ -300,7 +300,7 @@ export default function ReportDetails() {
                       <th className="pb-2 pr-4">Period</th>
                       <th className="pb-2 pr-4 text-[#FF6B35]">2G+3G</th>
                       <th className="pb-2 pr-4 text-[#3B9EFF]">4G</th>
-                      <th className="pb-2 pr-4 text-[#B794F6]">Total</th>
+                      <th className="pb-2 pr-4 text-[#4ADE80]">Total</th>
                       <th className="pb-2">4G %</th>
                     </tr>
                   </thead>
@@ -314,7 +314,7 @@ export default function ReportDetails() {
                         <td className="py-2 pr-4 font-mono text-[#3B9EFF]">
                           {row.volume4g?.toLocaleString()}
                         </td>
-                        <td className="py-2 pr-4 font-mono text-[#B794F6]">
+                        <td className="py-2 pr-4 font-mono text-[#4ADE80]">
                           {row.total?.toLocaleString()}
                         </td>
                         <td className="py-2">{row.contribution4gPct}%</td>

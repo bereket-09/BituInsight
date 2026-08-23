@@ -5,7 +5,7 @@ import { workbookApi } from '../api';
 import { downloadBlob } from '../utils/downloadBlob';
 import { parseTarget } from '../utils/parseTarget';
 
-const PPT_THEME_KEY = 'bituinsight_ppt_theme';
+const PPT_THEME_KEY = 'coreinsight_ppt_theme';
 
 function buildInitialState(completedKpis, defaultThreshold) {
   const selected = new Set(completedKpis.map((k) => k.reportId));
@@ -125,7 +125,7 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
       });
       const disposition = res.headers['content-disposition'];
       const match = disposition?.match(/filename="?([^"]+)"?/);
-      const filename = match?.[1] || `BituInsight_KPI_Report_${workbookId}.pptx`;
+      const filename = match?.[1] || `Core Insight_KPI_Report_${workbookId}.pptx`;
       downloadBlob(res.data, filename);
       setOpen(false);
     } catch (err) {
@@ -209,7 +209,7 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
                       <span className="text-sm font-semibold">Dark executive</span>
                     </div>
                     <div className="space-y-1 rounded-lg bg-[#0D1117] p-2">
-                      <div className="h-1.5 w-3/4 rounded bg-[#632CA6]" />
+                      <div className="h-1.5 w-3/4 rounded bg-[#00B140]" />
                       <div className="h-8 rounded bg-[#161B22]" />
                       <div className="flex gap-1">
                         <div className="h-2 flex-1 rounded bg-[#3B9EFF]/40" />
@@ -233,7 +233,7 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
                       <span className="text-sm font-semibold">Light boardroom</span>
                     </div>
                     <div className="space-y-1 rounded-lg border border-slate-200 bg-white p-2">
-                      <div className="h-1.5 w-3/4 rounded bg-[#632CA6]" />
+                      <div className="h-1.5 w-3/4 rounded bg-[#00B140]" />
                       <div className="h-8 rounded bg-slate-50" />
                       <div className="flex gap-1">
                         <div className="h-2 flex-1 rounded bg-blue-100" />

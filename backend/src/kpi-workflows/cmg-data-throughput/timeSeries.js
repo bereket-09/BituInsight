@@ -1,7 +1,7 @@
 const SERIES_COLORS = {
   mdc1: { line: '#3B9EFF', fill: 'rgba(59, 158, 255, 0.15)', label: 'MDC1' },
   mdc2: { line: '#FF6B35', fill: 'rgba(255, 107, 53, 0.15)', label: 'MDC2' },
-  total: { line: '#B794F6', fill: 'rgba(183, 148, 246, 0.12)', label: 'Total' },
+  total: { line: '#4ADE80', fill: 'rgba(74, 222, 128, 0.12)', label: 'Total' },
 };
 
 const GRANULARITY_THRESHOLDS = [

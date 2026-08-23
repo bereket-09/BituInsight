@@ -1,7 +1,7 @@
 import { createContext, useContext, useLayoutEffect, useState } from 'react';
 
 const ThemeContext = createContext(null);
-const STORAGE_KEY = 'bituinsight_theme';
+const STORAGE_KEY = 'coreinsight_theme';
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {

@@ -38,7 +38,7 @@ async function generate() {
   headerRow.fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF632CA6' },
+    fgColor: { argb: 'FF00B140' },
   };
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
 

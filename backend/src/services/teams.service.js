@@ -20,7 +20,7 @@ async function sendToTeams(webhookUrl, messageCard, chartPaths = []) {
     payload.sections.push({
       title: 'Generated Charts',
       facts: chartFacts,
-      text: `_${chartPaths.length} chart(s) generated. View full report in BituInsight portal._`,
+      text: `_${chartPaths.length} chart(s) generated. View full report in Core Insight portal._`,
     });
   }
 

@@ -2,18 +2,18 @@ services:
   postgres:
     # public.ecr.aws mirror avoids Docker Hub auth.docker.io timeouts
     image: public.ecr.aws/docker/library/postgres:16-alpine
-    container_name: bituinsight-db
+    container_name: core-insight-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-bituinsight}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bituinsight_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-bituinsight}
+      POSTGRES_USER: ${POSTGRES_USER:-coreinsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coreinsight_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-coreinsight}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bituinsight}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-coreinsight}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -22,11 +22,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: bituinsight-api
+    container_name: core-insight-api
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgres://${POSTGRES_USER:-bituinsight}:${POSTGRES_PASSWORD:-bituinsight_secret}@postgres:5432/${POSTGRES_DB:-bituinsight}
+      DATABASE_URL: postgres://${POSTGRES_USER:-coreinsight}:${POSTGRES_PASSWORD:-coreinsight_secret}@postgres:5432/${POSTGRES_DB:-coreinsight}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-long-secret}
       UPLOAD_DIR: /app/uploads
       REPORTS_DIR: /app/reports
@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: http://localhost:4000/api
-    container_name: bituinsight-web
+    container_name: core-insight-web
     ports:
       - "3000:80"
     depends_on:

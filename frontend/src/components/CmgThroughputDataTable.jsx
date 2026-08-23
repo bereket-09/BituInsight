@@ -137,7 +137,7 @@ export default function CmgThroughputDataTable({ timeSeries, filePrefix = 'cmg-t
             </span>
             <span className="font-mono text-xs text-[#3B9EFF]">MDC1 {formatGbps(viewPeak.mdc1)}</span>
             <span className="font-mono text-xs text-[#FF6B35]">MDC2 {formatGbps(viewPeak.mdc2)}</span>
-            <span className="font-mono text-xs font-semibold text-[#B794F6]">
+            <span className="font-mono text-xs font-semibold text-[#4ADE80]">
               Total {formatGbps(viewPeak.total)}
             </span>
           </div>
@@ -150,7 +150,7 @@ export default function CmgThroughputDataTable({ timeSeries, filePrefix = 'cmg-t
                 <th className="px-4 py-2.5">Period</th>
                 <th className="px-4 py-2.5 text-[#3B9EFF]">MDC1</th>
                 <th className="px-4 py-2.5 text-[#FF6B35]">MDC2</th>
-                <th className="px-4 py-2.5 text-[#B794F6]">Total</th>
+                <th className="px-4 py-2.5 text-[#4ADE80]">Total</th>
                 <th className="px-4 py-2.5">MDC1 %</th>
               </tr>
             </thead>
@@ -180,7 +180,7 @@ export default function CmgThroughputDataTable({ timeSeries, filePrefix = 'cmg-t
                     <td className="px-4 py-2 font-mono text-[#FF6B35]">
                       {formatGbps(row.mdc2)}
                     </td>
-                    <td className="px-4 py-2 font-mono font-medium text-[#B794F6]">
+                    <td className="px-4 py-2 font-mono font-medium text-[#4ADE80]">
                       {formatGbps(row.total)}
                     </td>
                     <td className="px-4 py-2 font-mono text-noc-muted">
@@ -228,7 +228,7 @@ export default function CmgThroughputDataTable({ timeSeries, filePrefix = 'cmg-t
                   <th className="px-4 py-2.5">Peak period</th>
                   <th className="px-4 py-2.5 text-[#3B9EFF]">MDC1</th>
                   <th className="px-4 py-2.5 text-[#FF6B35]">MDC2</th>
-                  <th className="px-4 py-2.5 text-[#B794F6]">Peak total</th>
+                  <th className="px-4 py-2.5 text-[#4ADE80]">Peak total</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,7 +242,7 @@ export default function CmgThroughputDataTable({ timeSeries, filePrefix = 'cmg-t
                     <td className="px-4 py-2 font-mono text-[#FF6B35]">
                       {formatGbps(row.mdc2)}
                     </td>
-                    <td className="px-4 py-2 font-mono font-semibold text-[#B794F6]">
+                    <td className="px-4 py-2 font-mono font-semibold text-[#4ADE80]">
                       {formatGbps(row.total)}
                     </td>
                   </tr>

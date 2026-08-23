@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@bituinsight.local');
+  const [email, setEmail] = useState('admin@coreinsight.local');
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export default function Login() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-noc-accent">
             <Radio className="h-6 w-6 text-white" />
           </div>
-          <span className="text-xl font-bold">BituInsight</span>
+          <span className="text-xl font-bold">Core Insight</span>
         </div>
         <div>
           <h2 className="text-4xl font-bold leading-tight">
@@ -46,7 +46,7 @@ export default function Login() {
             operational dashboards, and deliver insights to Microsoft Teams.
           </p>
         </div>
-        <p className="text-xs text-noc-muted">© 2026 BituInsight — NOC-grade analytics</p>
+        <p className="text-xs text-noc-muted">© 2026 Core Insight — NOC-grade analytics</p>
       </div>
 
       <div className="relative flex flex-1 items-center justify-center p-8">
@@ -59,7 +59,7 @@ export default function Login() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-noc-accent">
                 <Radio className="h-6 w-6 text-white" />
               </div>
-              <span className="text-xl font-bold">BituInsight</span>
+              <span className="text-xl font-bold">Core Insight</span>
             </div>
           </div>
 
@@ -107,7 +107,7 @@ export default function Login() {
           </button>
 
           <p className="text-center text-xs text-noc-muted">
-            Default: admin@bituinsight.local / admin123
+            Default: admin@coreinsight.local / admin123
           </p>
         </form>
       </div>

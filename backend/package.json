@@ -1,5 +1,5 @@
 {
-  "name": "bituinsight-api",
+  "name": "core-insight-api",
   "version": "1.0.0",
   "description": "Telecom KPI Analytics and Reporting Platform API",
   "main": "src/index.js",

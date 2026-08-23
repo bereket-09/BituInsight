@@ -12,7 +12,7 @@ async function seed() {
       `INSERT INTO users (email, password_hash, full_name)
        VALUES ($1, $2, $3)
        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
-      ['admin@bituinsight.local', hash, 'System Administrator']
+      ['admin@coreinsight.local', hash, 'System Administrator']
     );
 
     const workflows = getAllWorkflows();

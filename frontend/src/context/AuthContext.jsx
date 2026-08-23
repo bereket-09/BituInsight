@@ -5,13 +5,13 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('bituinsight_user');
+    const stored = localStorage.getItem('coreinsight_user');
     return stored ? JSON.parse(stored) : null;
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('bituinsight_token');
+    const token = localStorage.getItem('coreinsight_token');
     if (!token) {
       setLoading(false);
       return;
@@ -20,8 +20,8 @@ export function AuthProvider({ children }) {
       .me()
       .then((res) => setUser(res.data.user))
       .catch(() => {
-        localStorage.removeItem('bituinsight_token');
-        localStorage.removeItem('bituinsight_user');
+        localStorage.removeItem('coreinsight_token');
+        localStorage.removeItem('coreinsight_user');
         setUser(null);
       })
       .finally(() => setLoading(false));
@@ -30,15 +30,15 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const res = await authApi.login(email, password);
     const { token, user: userData } = res.data;
-    localStorage.setItem('bituinsight_token', token);
-    localStorage.setItem('bituinsight_user', JSON.stringify(userData));
+    localStorage.setItem('coreinsight_token', token);
+    localStorage.setItem('coreinsight_user', JSON.stringify(userData));
     setUser(userData);
     return userData;
   };
 
   const logout = () => {
-    localStorage.removeItem('bituinsight_token');
-    localStorage.removeItem('bituinsight_user');
+    localStorage.removeItem('coreinsight_token');
+    localStorage.removeItem('coreinsight_user');
     setUser(null);
   };
 

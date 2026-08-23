@@ -12,7 +12,7 @@ Sample Traffic Volume KPI report with 24 hourly records for **BituTel-PLMN-001**
 - Total data volume
 
 **Usage:**
-1. Log in to BituInsight at http://localhost:3000
+1. Log in to Core Insight at http://localhost:3000
 2. Go to **Upload KPI Report**
 3. Select workflow: **Traffic Volume KPI**
 4. Upload `traffic-volume-sample.xlsx`

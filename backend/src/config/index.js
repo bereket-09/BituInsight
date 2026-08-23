@@ -5,7 +5,7 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 4000,
   databaseUrl:
     process.env.DATABASE_URL ||
-    'postgres://bituinsight:bituinsight_secret@localhost:5432/bituinsight',
+    'postgres://coreinsight:coreinsight_secret@localhost:5432/coreinsight',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
   uploadDir: process.env.UPLOAD_DIR || './uploads',

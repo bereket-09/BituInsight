@@ -59,7 +59,7 @@ export default function Layout() {
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-bold text-noc-text">BituInsight</h1>
+            <h1 className="truncate text-sm font-bold text-noc-text">Core Insight</h1>
             <p className="text-[10px] uppercase tracking-widest text-noc-muted">Telecom KPI</p>
           </div>
         )}
@@ -174,7 +174,7 @@ export default function Layout() {
             )}
           </button>
           <div className="min-w-0 flex-1 lg:hidden">
-            <p className="truncate text-sm font-semibold text-noc-text">BituInsight</p>
+            <p className="truncate text-sm font-semibold text-noc-text">Core Insight</p>
             <p className="truncate text-[10px] text-noc-muted">
               {navItems.find((n) =>
                 n.to === '/'
