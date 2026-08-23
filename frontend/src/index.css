@@ -2,133 +2,325 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Core Insight design system.
+ *
+ * Surfaces carry a slight green undertone rather than the neutral blue-black of a
+ * default dark theme, so the brand colour reads as part of the interface instead
+ * of an accent dropped on top of it. Shadows are tinted to match — black shadows
+ * on a tinted ground look like holes.
+ */
+
 @layer base {
   :root {
-    --noc-bg: 246 248 252;
-    --noc-surface: 255 255 255;
+    /*
+     * Light: three distinct steps, page < surface < card. Surface and card were
+     * both pure white, which made every recessed panel and hover inside a card
+     * invisible in light mode — the elevation existed in the markup but not on
+     * screen. Dark mode always had the separation; light mode now matches.
+     */
+    --noc-bg: 241 245 243;
+    --noc-surface: 248 251 249;
     --noc-card: 255 255 255;
-    --noc-border: 226 232 240;
-    --noc-muted: 100 116 139;
-    --noc-text: 15 23 42;
-    --noc-text-dim: 71 85 105;
-    --shadow-glow: 0 0 24px rgba(0, 177, 64, 0.10);
-    --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --noc-border: 223 230 226;
+    --noc-muted: 98 112 106;
+    --noc-text: 12 20 17;
+    --noc-text-dim: 68 84 78;
+
+    --noc-elevate: 255 255 255;
+    --noc-hairline: 255 255 255;
+
+    --shadow-card: 0 1px 2px rgba(12, 30, 22, 0.05), 0 8px 24px -12px rgba(12, 30, 22, 0.12);
+    --shadow-lift: 0 2px 4px rgba(12, 30, 22, 0.06), 0 18px 40px -18px rgba(12, 30, 22, 0.22);
+    --shadow-glow: 0 0 0 1px rgba(0, 177, 64, 0.16), 0 12px 32px -14px rgba(0, 177, 64, 0.35);
+    --grain-opacity: 0.025;
   }
 
   .dark {
-    --noc-bg: 13 17 23;
-    --noc-surface: 22 27 34;
-    --noc-card: 26 29 35;
-    --noc-border: 48 54 61;
-    --noc-muted: 139 148 158;
-    --noc-text: 230 237 243;
-    --noc-text-dim: 156 163 175;
-    --shadow-glow: 0 0 20px rgba(0, 177, 64, 0.18);
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+    /* Deep charcoal with a green cast — not #000, not GitHub navy. */
+    --noc-bg: 9 13 12;
+    --noc-surface: 15 20 18;
+    --noc-card: 19 25 23;
+    --noc-border: 34 43 39;
+    --noc-muted: 133 148 142;
+    --noc-text: 232 240 236;
+    --noc-text-dim: 158 172 166;
+
+    --noc-elevate: 26 34 31;
+    --noc-hairline: 255 255 255;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px -16px rgba(0, 0, 0, 0.7);
+    --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.55), 0 24px 48px -20px rgba(0, 0, 0, 0.8);
+    --shadow-glow: 0 0 0 1px rgba(0, 177, 64, 0.28), 0 16px 40px -16px rgba(0, 177, 64, 0.3);
+    --grain-opacity: 0.05;
   }
 
   * {
     @apply border-noc-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-noc-bg text-noc-text transition-colors duration-200;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  }
+
+  /* A fixed grain layer keeps large flat surfaces from reading as dead vector fill. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Numbers must not shuffle horizontally as they update. */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-noc-accent/60 ring-offset-2 ring-offset-noc-bg;
+    border-radius: 0.5rem;
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-noc-surface;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-noc-border;
+    @apply rounded-full;
+    background: rgb(var(--noc-border));
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-noc-muted;
+    background: rgb(var(--noc-muted));
+    background-clip: content-box;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-noc-accent px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-noc-accentHover focus:outline-none focus:ring-2 focus:ring-noc-accent/50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-noc-accent px-4 py-2.5 text-sm font-semibold text-white
+           shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-all duration-200
+           hover:bg-noc-accentHover hover:shadow-[0_6px_18px_-6px_rgba(0,177,64,0.55)]
+           active:translate-y-px active:shadow-none
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-noc-border bg-noc-surface px-4 py-2.5 text-sm font-medium text-noc-text transition-all hover:bg-noc-card focus:outline-none focus:ring-2 focus:ring-noc-border disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-noc-border bg-noc-surface px-4 py-2.5
+           text-sm font-medium text-noc-text transition-all duration-200
+           hover:border-noc-accent/40 hover:bg-noc-card hover:text-noc-text
+           active:translate-y-px
+           disabled:cursor-not-allowed disabled:opacity-40;
   }
 
+  /*
+   * The card is the most repeated surface in the app, so it carries the weight of
+   * the redesign: a soft vertical gradient instead of flat fill, a hairline top
+   * highlight that suggests a light source above, and a tinted shadow.
+   */
   .card {
-    @apply rounded-xl border border-noc-border bg-noc-card p-5 shadow-card transition-colors duration-200;
+    @apply relative rounded-2xl border border-noc-border p-5 transition-all duration-300;
+    background-image: linear-gradient(
+      180deg,
+      rgb(var(--noc-elevate) / 0.85) 0%,
+      rgb(var(--noc-card)) 42%
+    );
+    box-shadow: var(--shadow-card);
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    border-radius: 1rem 1rem 0 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--noc-hairline) / 0.09),
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  .card-interactive {
+    @apply cursor-pointer;
+  }
+
+  .card-interactive:hover {
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-2px);
+    @apply border-noc-accent/25;
   }
 
   .input-field {
-    @apply w-full rounded-lg border border-noc-border bg-noc-surface px-3 py-2.5 text-sm text-noc-text placeholder-noc-muted transition-colors focus:border-noc-accent focus:outline-none focus:ring-1 focus:ring-noc-accent/50;
+    @apply w-full rounded-xl border border-noc-border bg-noc-surface px-3.5 py-2.5 text-sm text-noc-text
+           placeholder-noc-muted transition-all duration-200
+           hover:border-noc-border
+           focus:border-noc-accent/60 focus:outline-none focus:ring-4 focus:ring-noc-accent/10;
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
   }
 
   .badge-success {
-    @apply badge bg-green-500/10 text-green-600 dark:text-green-400;
+    @apply bg-noc-success/10 text-noc-success;
   }
 
   .badge-warning {
-    @apply badge bg-orange-500/10 text-orange-600 dark:text-orange-400;
+    @apply bg-noc-warning/10 text-noc-warning;
   }
 
   .badge-danger {
-    @apply badge bg-red-500/10 text-red-600 dark:text-red-400;
+    @apply bg-noc-danger/10 text-noc-danger;
   }
 
   .badge-info {
-    @apply badge bg-blue-500/10 text-blue-600 dark:text-blue-400;
+    @apply bg-noc-info/10 text-noc-info;
   }
 
   .badge-neutral {
-    @apply badge bg-slate-500/10 text-slate-600 dark:text-gray-400;
+    @apply bg-noc-muted/10 text-noc-muted;
+  }
+
+  /* Section label: small, spaced, quiet — replaces shouting all-caps headers. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-noc-accent;
   }
 
   .dashboard-hero {
-    @apply relative overflow-hidden rounded-2xl border border-noc-border p-6 sm:p-8;
-    background:
-      radial-gradient(ellipse 80% 60% at 100% 0%, rgba(99, 44, 166, 0.22), transparent 55%),
-      radial-gradient(ellipse 50% 40% at 0% 100%, rgba(59, 158, 255, 0.12), transparent 50%),
-      rgb(var(--noc-card));
+    @apply relative overflow-hidden rounded-3xl border border-noc-border p-6 sm:p-9;
+    background-image:
+      radial-gradient(120% 140% at 88% -20%, rgb(0 177 64 / 0.16) 0%, transparent 55%),
+      linear-gradient(180deg, rgb(var(--noc-elevate) / 0.9), rgb(var(--noc-card)));
+    box-shadow: var(--shadow-card);
   }
 
   .dashboard-hero::before {
     content: '';
-    @apply pointer-events-none absolute inset-0 opacity-40;
-    background-image: linear-gradient(
-      135deg,
-      transparent 40%,
-      rgba(99, 44, 166, 0.06) 50%,
-      transparent 60%
-    );
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(0 177 64 / 0.4), transparent);
   }
 
   .stat-glow {
-    @apply relative overflow-hidden rounded-xl border border-noc-border bg-noc-card p-5 transition-all duration-300;
+    @apply relative overflow-hidden transition-all duration-300;
   }
 
   .stat-glow:hover {
-    @apply border-noc-accent/40 shadow-glow;
     transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+    @apply border-noc-accent/30;
   }
 
   .stat-glow::after {
     content: '';
-    @apply absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 transition-opacity duration-300;
-    background: radial-gradient(circle, rgba(0, 177, 64, 0.18), transparent 70%);
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgb(0 177 64 / 0.75), transparent);
+    opacity: 0;
+    transition: opacity 300ms ease;
   }
 
   .stat-glow:hover::after {
-    @apply opacity-100;
+    opacity: 1;
+  }
+
+  /* Skeletons mirror the shape of what is loading, rather than a spinner. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-noc-border/40;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--noc-hairline) / 0.07),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@layer utilities {
+  .stagger > * {
+    animation: fade-up 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 340ms; }
+
+  .content-shell {
+    @apply mx-auto w-full max-w-[1440px];
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Motion is decoration here; anyone who has asked for less should get none. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

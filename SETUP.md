@@ -346,6 +346,17 @@ whichever vendor key it finds. An existing `ANTHROPIC_API_KEY` on its own still
 selects Claude exactly as it did before, so nothing to change if that is your
 current setup.
 
+### Check it works
+
+```bash
+cd backend
+npm run llm:check
+```
+
+It prints the provider your environment resolves to and writes one summary from
+sample data, so you can see whether the model is reachable before uploading
+anything real.
+
 ### If the model can't be reached
 
 Nothing breaks. If the key is wrong, the host is down, the request times out, or

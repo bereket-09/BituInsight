@@ -4,22 +4,22 @@ import { useNavigate } from 'react-router-dom';
 import {
   Upload as UploadIcon,
   FileSpreadsheet,
-  CheckCircle2,
+  Check,
   AlertTriangle,
   X,
-  Eye,
   Layers,
   GitBranch,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { workflowApi, reportApi, workbookApi } from '../api';
-import LoadingSpinner from '../components/LoadingSpinner';
 import ExcelPreview from '../components/ExcelPreview';
 import KpiWorkflowSelector from '../components/KpiWorkflowSelector';
 import UploadWizardSteps from '../components/UploadWizardSteps';
+
+const ICON_STROKE = 1.75;
+const ACCEPTED_EXTENSIONS = ['.xlsx', '.xls'];
 
 const SINGLE_STEPS = [
   { id: 'workflow', label: 'KPI workflow', hint: 'Choose parser' },
@@ -31,6 +31,23 @@ const WORKBOOK_STEPS = [
   { id: 'file', label: 'Upload workbook', hint: 'CMM .xlsx' },
   { id: 'review', label: 'Review KPIs', hint: 'Thresholds' },
 ];
+
+function StatTile({ label, value, tone = 'neutral' }) {
+  const tones = {
+    neutral: 'text-noc-text',
+    success: 'text-noc-success',
+    danger: 'text-noc-danger',
+    muted: 'text-noc-muted',
+  };
+  return (
+    <div className="rounded-xl border border-noc-border bg-noc-bg/40 px-4 py-3.5">
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-noc-muted">{label}</p>
+      <p className={clsx('tabular mt-1.5 font-display text-2xl font-semibold', tones[tone])}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 export default function Upload() {
   const [mode, setMode] = useState('workbook');
@@ -47,6 +64,7 @@ export default function Upload() {
   const [defaultThreshold, setDefaultThreshold] = useState(99);
   const [kpiThresholds, setKpiThresholds] = useState({});
   const [uploadError, setUploadError] = useState('');
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -199,6 +217,29 @@ export default function Upload() {
     setWizardStep(isWorkbook ? 0 : workflowSlug ? 1 : 0);
   };
 
+  /** One path for browse and drop, so both validate the same way. */
+  const handleFileSelected = (nextFile) => {
+    setValidationResult(null);
+    setPreview(null);
+    setWorkbookPreview(null);
+    setUploadError('');
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    const name = nextFile.name.toLowerCase();
+    if (!ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+      setFile(null);
+      setUploadError(
+        `“${nextFile.name}” is not an Excel workbook. Upload a .xlsx or .xls export instead.`
+      );
+      return;
+    }
+    setFile(nextFile);
+    if (isWorkbook) setWizardStep(0);
+    else if (workflowSlug) setWizardStep(1);
+  };
+
   const switchMode = (nextMode) => {
     setMode(nextMode);
     setWizardStep(0);
@@ -244,64 +285,77 @@ export default function Upload() {
     if (slug) setWizardStep(1);
   };
 
-  if (isLoading) return <LoadingSpinner label="Loading workflows..." />;
-
   const previewPending = isWorkbook ? workbookPreviewMutation.isPending : previewMutation.isPending;
   const previewError = isWorkbook ? workbookPreviewMutation.error : previewMutation.error;
+  const errorText =
+    uploadError ||
+    (previewError
+      ? `Preview failed — ${previewError?.response?.data?.error || previewError.message}`
+      : '');
+
+  const modes = [
+    {
+      id: 'workbook',
+      icon: Layers,
+      label: 'CMM workbook',
+      hint: 'Every Data sheet',
+    },
+    {
+      id: 'single',
+      icon: GitBranch,
+      label: 'Single KPI',
+      hint: 'One workflow',
+    },
+  ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      <div className="relative overflow-hidden rounded-2xl border border-noc-border bg-gradient-to-br from-noc-card via-noc-card to-noc-accent/10 px-6 py-8 md:px-8">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-noc-accent/10 blur-3xl" />
-        <div className="relative">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-noc-accent/30 bg-noc-accent/10 px-3 py-1 text-xs font-medium text-noc-accent">
-            <Sparkles className="h-3.5 w-3.5" />
-            New report wizard
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Create KPI insight</h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-noc-muted">
-            Upload a full CMM workbook to process every Data sheet, or pick a single KPI workflow
-            for one-off Excel exports.
-          </p>
-        </div>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <header className="dashboard-hero">
+        <p className="eyebrow">New report</p>
+        <h1 className="mt-3 text-display-lg text-noc-text">Create a KPI insight</h1>
+        <p className="mt-3 max-w-[58ch] text-sm leading-relaxed text-noc-textDim">
+          Process a full CMM workbook — one report per Data sheet — or run a single KPI workflow
+          against a one-off Excel export.
+        </p>
+      </header>
+
+      {/* Mode */}
+      <div
+        role="group"
+        aria-label="Upload mode"
+        className="grid grid-cols-2 gap-1.5 rounded-2xl border border-noc-border bg-noc-surface/60 p-1.5"
+      >
+        {modes.map((m) => {
+          const active = mode === m.id;
+          const Icon = m.icon;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => switchMode(m.id)}
+              className={clsx(
+                'flex items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm transition-all duration-200 active:translate-y-px',
+                active
+                  ? 'bg-noc-card text-noc-text shadow-card ring-1 ring-noc-accent/30'
+                  : 'text-noc-muted hover:bg-noc-card/60 hover:text-noc-text'
+              )}
+            >
+              <Icon
+                className={clsx('h-4 w-4', active ? 'text-noc-accent' : 'text-noc-muted')}
+                strokeWidth={ICON_STROKE}
+              />
+              <span className="font-semibold tracking-tight">{m.label}</span>
+              <span className="hidden text-[11px] font-normal text-noc-muted sm:inline">
+                · {m.hint}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex gap-2 rounded-xl border border-noc-border bg-noc-surface/50 p-1">
-        <button
-          type="button"
-          onClick={() => switchMode('workbook')}
-          className={clsx(
-            'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all',
-            isWorkbook
-              ? 'bg-noc-card text-noc-accent shadow-card ring-1 ring-noc-accent/20'
-              : 'text-noc-muted hover:text-noc-text'
-          )}
-        >
-          <Layers className="h-4 w-4" />
-          CMM Workbook
-          <span className="hidden text-[10px] font-normal text-noc-muted sm:inline">
-            Multi-KPI
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => switchMode('single')}
-          className={clsx(
-            'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all',
-            !isWorkbook
-              ? 'bg-noc-card text-noc-accent shadow-card ring-1 ring-noc-accent/20'
-              : 'text-noc-muted hover:text-noc-text'
-          )}
-        >
-          <GitBranch className="h-4 w-4" />
-          Single KPI
-          <span className="hidden text-[10px] font-normal text-noc-muted sm:inline">
-            One workflow
-          </span>
-        </button>
-      </div>
-
-      <div className="card border-noc-accent/15 bg-noc-card/80 px-4 py-5 sm:px-6">
+      {/* Progress */}
+      <div className="card px-5 py-5 sm:px-6">
         <UploadWizardSteps
           steps={steps}
           currentIndex={wizardStep}
@@ -309,31 +363,46 @@ export default function Upload() {
         />
       </div>
 
-      <div className="card space-y-6">
+      <div className="card space-y-6 p-5 sm:p-6">
         {/* ——— Single KPI: workflow step ——— */}
         {!isWorkbook && wizardStep === 0 && (
-          <KpiWorkflowSelector
-            workflows={workflows}
-            value={workflowSlug}
-            onChange={handleWorkflowSelect}
-          />
+          isLoading ? (
+            <div className="space-y-4">
+              <div className="skeleton h-5 w-48" />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton h-[13.5rem] rounded-2xl" />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <KpiWorkflowSelector
+              workflows={workflows}
+              value={workflowSlug}
+              onChange={handleWorkflowSelect}
+            />
+          )
         )}
 
         {/* ——— File upload step ——— */}
         {((isWorkbook && wizardStep === 0) || (!isWorkbook && wizardStep === 1)) && (
           <div className="space-y-4">
             {!isWorkbook && selectedWorkflow && (
-              <div className="flex items-center gap-3 rounded-xl border border-noc-border bg-noc-surface/50 px-4 py-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-noc-accent/15">
-                  <GitBranch className="h-4 w-4 text-noc-accent" />
-                </div>
+              <div className="flex items-center gap-3 rounded-xl border border-noc-border bg-noc-bg/40 px-4 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-noc-accent/10 text-noc-accent">
+                  <GitBranch className="h-4 w-4" strokeWidth={ICON_STROKE} />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-noc-muted">Selected workflow</p>
-                  <p className="truncate text-sm font-semibold">{selectedWorkflow.name}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-noc-muted">
+                    Selected workflow
+                  </p>
+                  <p className="truncate text-sm font-semibold tracking-tight text-noc-text">
+                    {selectedWorkflow.name}
+                  </p>
                 </div>
                 <button
                   type="button"
-                  className="text-xs text-noc-accent hover:underline"
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-noc-muted transition-colors hover:text-noc-accent active:translate-y-px"
                   onClick={() => setWizardStep(0)}
                 >
                   Change
@@ -342,71 +411,110 @@ export default function Upload() {
             )}
 
             {isWorkbook && (
-              <div className="rounded-xl border border-noc-accent/20 bg-gradient-to-r from-noc-accent/10 to-transparent p-4 text-sm text-noc-muted">
-                <p className="font-medium text-noc-text">CMM workbook mode</p>
-                <p className="mt-1 leading-relaxed">
-                  Only sheets named <strong className="text-noc-accent">Data…</strong> are processed.
-                  Each valid sheet becomes its own KPI report with charts and workbook tabs.
+              <div className="rounded-xl border border-noc-border bg-noc-bg/40 p-4">
+                <p className="eyebrow mb-1.5">CMM workbook mode</p>
+                <p className="max-w-[68ch] text-sm leading-relaxed text-noc-textDim">
+                  Only sheets named <span className="font-mono text-noc-text">Data…</span> are
+                  processed. Each valid sheet becomes its own KPI report with charts and workbook
+                  tabs.
                 </p>
               </div>
             )}
 
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="sr-only"
+              onChange={(e) => {
+                handleFileSelected(e.target.files?.[0] || null);
+                e.target.value = '';
+              }}
+            />
+
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Choose an Excel file to upload"
               onClick={() => fileInputRef.current?.click()}
-              className="group cursor-pointer rounded-2xl border-2 border-dashed border-noc-border bg-noc-surface/30 p-12 text-center transition-all hover:border-noc-accent/50 hover:bg-noc-accent/5"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!dragActive) setDragActive(true);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) setDragActive(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                handleFileSelected(e.dataTransfer.files?.[0] || null);
+              }}
+              className={clsx(
+                'group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-200',
+                dragActive
+                  ? 'border-noc-accent bg-noc-accent/[0.07] shadow-glow'
+                  : 'border-noc-border bg-noc-bg/30 hover:border-noc-accent/50 hover:bg-noc-accent/[0.04]'
+              )}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files[0] || null;
-                  setFile(f);
-                  setValidationResult(null);
-                  setPreview(null);
-                  setWorkbookPreview(null);
-                  setUploadError('');
-                  if (!f) return;
-                  if (isWorkbook) setWizardStep(0);
-                  else if (workflowSlug) setWizardStep(1);
-                }}
-              />
               {file ? (
-                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-noc-accent/15">
-                    <FileSpreadsheet className="h-7 w-7 text-noc-accent" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className="font-semibold">{file.name}</p>
-                    <p className="text-xs text-noc-muted">{(file.size / 1024).toFixed(1)} KB</p>
+                <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:text-left">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-noc-accent/10 text-noc-accent">
+                    <FileSpreadsheet className="h-6 w-6" strokeWidth={ICON_STROKE} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold tracking-tight text-noc-text">
+                      {file.name}
+                    </p>
+                    <p className="tabular mt-0.5 text-xs text-noc-muted">
+                      {(file.size / 1024).toFixed(1)} KB · ready to process
+                    </p>
                   </div>
                   <button
                     type="button"
+                    aria-label="Remove file"
                     onClick={(e) => {
                       e.stopPropagation();
                       resetFile();
                     }}
-                    className="rounded-lg border border-noc-border p-2 hover:bg-noc-card"
+                    className="rounded-lg border border-noc-border p-2 text-noc-muted transition-colors hover:border-noc-danger/40 hover:text-noc-danger active:translate-y-px"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" strokeWidth={ICON_STROKE} />
                   </button>
                 </div>
               ) : (
                 <>
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-noc-accent/10 transition-transform group-hover:scale-105">
-                    <UploadIcon className="h-7 w-7 text-noc-accent" />
-                  </div>
-                  <p className="mt-4 text-sm font-medium">Drop Excel here or click to browse</p>
-                  <p className="mt-1 text-xs text-noc-muted">.xlsx · .xls</p>
+                  <span
+                    className={clsx(
+                      'mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-noc-accent/10 text-noc-accent transition-transform duration-300',
+                      dragActive ? 'scale-110' : 'group-hover:scale-105'
+                    )}
+                  >
+                    <UploadIcon className="h-6 w-6" strokeWidth={ICON_STROKE} />
+                  </span>
+                  <p className="mt-5 text-[15px] font-semibold tracking-tight text-noc-text">
+                    {dragActive ? 'Release to add the workbook' : 'Drop your Excel file here'}
+                  </p>
+                  <p className="mt-1.5 text-xs text-noc-muted">
+                    or click to browse · .xlsx and .xls, up to one file
+                  </p>
                 </>
               )}
             </div>
 
             {previewPending && (
-              <div className="flex items-center justify-center gap-2 rounded-lg bg-noc-surface/80 py-4 text-sm text-noc-muted">
-                <Eye className="h-4 w-4 animate-pulse text-noc-accent" />
-                {isWorkbook ? 'Scanning Data sheets…' : 'Reading workbook structure…'}
+              <div className="space-y-3 rounded-xl border border-noc-border bg-noc-bg/40 p-4">
+                <p className="text-xs font-medium text-noc-textDim">
+                  {isWorkbook ? 'Scanning Data sheets' : 'Reading workbook structure'}
+                </p>
+                <div className="skeleton h-3 w-2/3" />
+                <div className="skeleton h-3 w-1/2" />
+                <div className="skeleton h-3 w-5/6" />
               </div>
             )}
           </div>
@@ -414,12 +522,12 @@ export default function Upload() {
 
         {/* ——— Workbook review ——— */}
         {isWorkbook && wizardStep === 1 && workbookPreview && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-end gap-4 rounded-xl border border-noc-border bg-noc-surface/50 p-4">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-noc-muted">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-end gap-4 rounded-xl border border-noc-border bg-noc-bg/40 p-4">
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-noc-muted">
                   Default target threshold (%)
-                </label>
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -439,84 +547,99 @@ export default function Upload() {
                       return next;
                     });
                   }}
-                  className="input-field w-28"
+                  className="input-field tabular w-28"
                 />
-              </div>
-              <p className="text-xs text-noc-muted">Override per KPI in the table below</p>
+              </label>
+              <p className="pb-2.5 text-xs text-noc-muted">
+                Override the threshold per KPI in the table below
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-noc-border bg-noc-surface/50 p-4">
-                <p className="text-xs text-noc-muted">Data sheets</p>
-                <p className="text-2xl font-bold">{workbookPreview.dataSheetCount}</p>
-              </div>
-              <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4">
-                <p className="text-xs text-noc-muted">Valid</p>
-                <p className="text-2xl font-bold text-green-400">{workbookPreview.validCount}</p>
-              </div>
-              <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
-                <p className="text-xs text-noc-muted">Invalid</p>
-                <p className="text-2xl font-bold text-red-400">{workbookPreview.invalidCount}</p>
-              </div>
-              <div className="rounded-xl border border-noc-border bg-noc-surface/50 p-4">
-                <p className="text-xs text-noc-muted">Ignored</p>
-                <p className="text-2xl font-bold">{workbookPreview.ignoredSheetCount}</p>
-              </div>
+              <StatTile label="Data sheets" value={workbookPreview.dataSheetCount} />
+              <StatTile label="Valid" value={workbookPreview.validCount} tone="success" />
+              <StatTile
+                label="Invalid"
+                value={workbookPreview.invalidCount}
+                tone={workbookPreview.invalidCount > 0 ? 'danger' : 'muted'}
+              />
+              <StatTile
+                label="Ignored"
+                value={workbookPreview.ignoredSheetCount}
+                tone="muted"
+              />
             </div>
 
             <div className="overflow-hidden rounded-xl border border-noc-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-noc-border bg-noc-surface/80 text-left text-xs text-noc-muted">
-                    <th className="px-4 py-3">KPI</th>
-                    <th className="px-4 py-3">Sheet</th>
-                    <th className="px-4 py-3">Rows</th>
-                    <th className="px-4 py-3">Granularity</th>
-                    <th className="px-4 py-3">Threshold %</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workbookPreview.kpis?.map((kpi) => (
-                    <tr key={kpi.sheetName} className="border-b border-noc-border/40">
-                      <td className="px-4 py-3 font-medium">{kpi.kpiName}</td>
-                      <td className="px-4 py-3 text-xs text-noc-muted">{kpi.sheetName}</td>
-                      <td className="px-4 py-3 font-mono">{kpi.rowCount}</td>
-                      <td className="px-4 py-3">{kpi.granularity}</td>
-                      <td className="px-4 py-3">
-                        {kpi.valid ? (
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            step={0.1}
-                            value={kpiThresholds[kpi.kpiName] ?? defaultThreshold}
-                            onChange={(e) =>
-                              setKpiThresholds((prev) => ({
-                                ...prev,
-                                [kpi.kpiName]: Number(e.target.value) || defaultThreshold,
-                              }))
-                            }
-                            className="input-field w-20 py-1 text-xs"
-                          />
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {kpi.valid ? (
-                          <span className="badge-success">Ready</span>
-                        ) : (
-                          <span className="text-red-400" title={kpi.errors?.[0]?.message}>
-                            Invalid
-                          </span>
-                        )}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="tabular w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-noc-border bg-noc-bg/50 text-left text-[10px] uppercase tracking-[0.12em] text-noc-muted">
+                      <th className="px-4 py-3 font-medium">KPI</th>
+                      <th className="px-4 py-3 font-medium">Sheet</th>
+                      <th className="px-4 py-3 font-medium">Rows</th>
+                      <th className="px-4 py-3 font-medium">Granularity</th>
+                      <th className="px-4 py-3 font-medium">Threshold %</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {workbookPreview.kpis?.map((kpi) => (
+                      <tr
+                        key={kpi.sheetName}
+                        className="border-b border-noc-border/40 transition-colors last:border-0 hover:bg-noc-accent/[0.04]"
+                      >
+                        <td className="px-4 py-3 font-medium text-noc-text">{kpi.kpiName}</td>
+                        <td className="px-4 py-3 text-xs text-noc-muted">{kpi.sheetName}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-noc-textDim">
+                          {kpi.rowCount}
+                        </td>
+                        <td className="px-4 py-3 text-noc-textDim">{kpi.granularity}</td>
+                        <td className="px-4 py-3">
+                          {kpi.valid ? (
+                            <input
+                              type="number"
+                              min={1}
+                              max={100}
+                              step={0.1}
+                              aria-label={`Threshold for ${kpi.kpiName}`}
+                              value={kpiThresholds[kpi.kpiName] ?? defaultThreshold}
+                              onChange={(e) =>
+                                setKpiThresholds((prev) => ({
+                                  ...prev,
+                                  [kpi.kpiName]: Number(e.target.value) || defaultThreshold,
+                                }))
+                              }
+                              className="input-field tabular w-20 px-2 py-1 text-xs"
+                            />
+                          ) : (
+                            <span className="text-noc-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {kpi.valid ? (
+                            <span className="badge badge-success">Ready</span>
+                          ) : (
+                            <span
+                              className="badge badge-danger"
+                              title={kpi.errors?.[0]?.message}
+                            >
+                              Invalid
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {workbookPreview.invalidCount > 0 && (
+              <p className="text-xs text-noc-muted">
+                Invalid sheets are skipped. Hover the status chip to see why a sheet failed.
+              </p>
+            )}
           </div>
         )}
 
@@ -542,24 +665,39 @@ export default function Upload() {
 
             {validationResult && (
               <div
+                aria-live="polite"
                 className={clsx(
-                  'rounded-xl border p-4',
+                  'flex items-start gap-3 rounded-xl border p-4',
                   validationResult.valid
-                    ? 'border-green-500/30 bg-green-500/10'
-                    : 'border-red-500/30 bg-red-500/10'
+                    ? 'border-noc-success/30 bg-noc-success/[0.07]'
+                    : 'border-noc-danger/30 bg-noc-danger/[0.07]'
                 )}
               >
-                <div className="flex items-center gap-2">
-                  {validationResult.valid ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-400" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-400" />
+                <span
+                  className={clsx(
+                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                    validationResult.valid
+                      ? 'bg-noc-success/15 text-noc-success'
+                      : 'bg-noc-danger/15 text-noc-danger'
                   )}
-                  <span className="font-medium">
+                >
+                  {validationResult.valid ? (
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  ) : (
+                    <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  )}
+                </span>
+                <div>
+                  <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
                     {validationResult.valid
                       ? `Validation passed — ${validationResult.rowCount} rows ready`
-                      : 'Validation failed — fix mapping and try again'}
-                  </span>
+                      : 'Validation failed'}
+                  </p>
+                  {!validationResult.valid && (
+                    <p className="mt-1 text-xs leading-relaxed text-noc-textDim">
+                      Adjust the header or data start row above, then validate again.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -567,41 +705,60 @@ export default function Upload() {
         )}
 
         {file && workbookPreview?.suggestWorkbookMode && mode !== 'workbook' && (
-          <div className="rounded-xl border border-noc-accent/40 bg-noc-accent/10 p-4 text-sm">
-            <p className="font-medium text-noc-accent">
-              This file looks like a CMM workbook ({workbookPreview.dataSheetCount} Data sheets)
+          <div className="rounded-xl border border-noc-accent/30 bg-noc-accent/[0.07] p-4">
+            <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
+              This file looks like a CMM workbook
+            </p>
+            <p className="tabular mt-1 text-xs text-noc-textDim">
+              {workbookPreview.dataSheetCount} Data sheets were detected. Workbook mode produces
+              one report per sheet.
             </p>
             <button type="button" className="btn-primary mt-3" onClick={() => switchMode('workbook')}>
-              Switch to CMM Workbook mode
+              Switch to workbook mode
             </button>
           </div>
         )}
 
-        {(previewError || uploadError) && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-            {uploadError || `Preview failed: ${previewError?.response?.data?.error || previewError.message}`}
+        {errorText && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex items-start gap-3 rounded-xl border border-noc-danger/30 bg-noc-danger/[0.07] p-4"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-noc-danger"
+              strokeWidth={ICON_STROKE}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight text-noc-text">
+                {uploadError ? 'Upload could not continue' : 'Preview could not be generated'}
+              </p>
+              <p className="mt-1 break-words text-xs leading-relaxed text-noc-textDim">
+                {errorText}
+              </p>
+            </div>
           </div>
         )}
 
         {uploadProgress > 0 && uploadProgress < 100 && (
           <div className="space-y-2">
-            <div className="flex justify-between text-xs text-noc-muted">
-              <span>Uploading</span>
+            <div className="tabular flex justify-between text-[11px] font-medium text-noc-muted">
+              <span className="uppercase tracking-[0.12em]">Uploading</span>
               <span>{uploadProgress}%</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-noc-surface">
+            <div className="h-1.5 overflow-hidden rounded-full bg-noc-border/60">
               <div
-                className="h-full rounded-full bg-noc-accent transition-all"
+                className="h-full rounded-full bg-noc-accent transition-[width] duration-300 ease-out"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-noc-border pt-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-noc-border pt-5">
           {wizardStep > 0 && (
             <button type="button" onClick={goBack} className="btn-secondary">
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" strokeWidth={ICON_STROKE} />
               Back
             </button>
           )}
@@ -615,7 +772,7 @@ export default function Upload() {
                 className="btn-secondary"
               >
                 Continue
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" strokeWidth={ICON_STROKE} />
               </button>
             )}
 
@@ -648,7 +805,7 @@ export default function Upload() {
                     uploadMutation.isPending ||
                     (validationResult && !validationResult.valid))
               }
-              className="btn-primary min-w-[160px]"
+              className="btn-primary min-w-[168px]"
             >
               {isWorkbook
                 ? workbookUploadMutation.isPending
@@ -656,7 +813,7 @@ export default function Upload() {
                   : `Process ${workbookPreview?.validCount || 0} KPIs`
                 : uploadMutation.isPending
                   ? 'Uploading…'
-                  : 'Upload & Process'}
+                  : 'Upload and process'}
             </button>
           </div>
         </div>

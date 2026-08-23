@@ -13,8 +13,9 @@ Production-grade telecom KPI workflow engine for Excel report ingestion, KPI-spe
 - **Excel ingestion & validation** — Structure, columns, and data type checks with detailed errors
 - **Analytics intelligence layer** — Seasonality-aware anomaly detection, trend fitting,
   forecasting, capacity headroom, and data-quality scoring (see below)
-- **Executive narratives** — Optional Claude-authored summary per report, with a
-  deterministic fallback so a report always carries a written summary
+- **Executive narratives** — Optional model-authored summary per report from any
+  provider (OpenAI, Ollama, Groq, Anthropic, or any OpenAI-compatible endpoint),
+  with a deterministic fallback so a report always carries a written summary
 - **Chart generation** — Server-side Chart.js PNG rendering via `@napi-rs/canvas`
   (no system graphics libraries required); images stored in Postgres so they survive
   on hosts without a persistent disk

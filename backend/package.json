@@ -8,7 +8,8 @@
     "dev": "node --watch src/index.js",
     "seed": "node src/db/seed.js",
     "db:setup": "node src/db/bootstrap.js",
-    "mcp": "node src/mcp/index.js"
+    "mcp": "node src/mcp/index.js",
+    "llm:check": "node scripts/check-llm.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

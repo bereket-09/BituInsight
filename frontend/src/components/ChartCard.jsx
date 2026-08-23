@@ -16,9 +16,30 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Download, Image as ImageIcon } from 'lucide-react';
+import clsx from 'clsx';
 import { useChartTheme } from '../hooks/useChartTheme';
 import ChartFullscreenModal from './ChartFullscreenModal';
+
+const ICON_STROKE = 1.75;
+
+/**
+ * Chart chrome stays quiet until the pointer (or keyboard focus) arrives — the
+ * data is the subject, the toolbar is not.
+ */
+function ChartAction({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="rounded-lg p-1.5 text-noc-muted transition-colors duration-200 hover:bg-noc-accent/10 hover:text-noc-accent active:translate-y-px"
+    >
+      <Icon className="h-4 w-4" strokeWidth={ICON_STROKE} />
+    </button>
+  );
+}
 
 const PIE_COLORS = ['#FF6B35', '#3B9EFF', '#4ADE80', '#00D4AA'];
 
@@ -49,7 +70,7 @@ function PieTooltip({ active, payload, total }) {
   const valueLabel = formatPieValue(value);
 
   return (
-    <div className="rounded-lg border border-noc-border bg-noc-card px-3 py-2 text-xs shadow-lg">
+    <div className="tabular rounded-xl border border-noc-border bg-noc-card px-3 py-2 text-xs shadow-lift">
       <p className="font-semibold text-noc-text">{name}</p>
       <p className="mt-1 font-mono text-noc-muted">{valueLabel}</p>
       <p className="mt-0.5 font-mono text-noc-accent">{share}</p>
@@ -59,10 +80,12 @@ function PieTooltip({ active, payload, total }) {
 
 export default function ChartCard({
   title,
+  eyebrow,
   type,
   data,
   height = 280,
   onDownloadPng,
+  onExpandPng,
 }) {
   const chartTheme = useChartTheme();
   const [fullscreen, setFullscreen] = useState(false);
@@ -199,20 +222,35 @@ export default function ChartCard({
 
   return (
     <>
-      <div className="card relative">
-        <div className="mb-4 flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-noc-text">{title}</h3>
-          <button
-            type="button"
-            onClick={() => setFullscreen(true)}
-            className="shrink-0 rounded-lg p-2 text-noc-muted hover:bg-noc-surface hover:text-noc-accent"
-            title="Fullscreen preview"
+      <figure className="card group relative flex h-full flex-col p-0">
+        <figcaption className="flex items-start justify-between gap-3 border-b border-noc-border/70 px-5 py-4">
+          <div className="min-w-0">
+            {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
+            <h3 className="truncate text-[13px] font-semibold tracking-tight text-noc-text">
+              {title}
+            </h3>
+          </div>
+          <div
+            className={clsx(
+              'flex shrink-0 items-center gap-0.5 transition-opacity duration-200',
+              'md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'
+            )}
           >
-            <Maximize2 className="h-4 w-4" />
-          </button>
-        </div>
-        {renderChart(height)}
-      </div>
+            {onExpandPng && (
+              <ChartAction icon={ImageIcon} label="View exported image" onClick={onExpandPng} />
+            )}
+            {onDownloadPng && (
+              <ChartAction icon={Download} label="Download image" onClick={onDownloadPng} />
+            )}
+            <ChartAction
+              icon={Maximize2}
+              label="Expand chart"
+              onClick={() => setFullscreen(true)}
+            />
+          </div>
+        </figcaption>
+        <div className="flex-1 px-2 pb-4 pt-5">{renderChart(height)}</div>
+      </figure>
 
       <ChartFullscreenModal
         open={fullscreen}

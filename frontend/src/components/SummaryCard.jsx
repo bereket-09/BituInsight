@@ -1,38 +1,43 @@
 import clsx from 'clsx';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
-const trendIcons = {
-  up: TrendingUp,
-  down: TrendingDown,
-  neutral: Minus,
-};
-
-const trendColors = {
-  up: 'text-green-400',
-  down: 'text-orange-400',
-  neutral: 'text-noc-muted',
+/*
+ * The figure is the card. Label sits above in a quiet eyebrow, the trend is a
+ * small chip pinned to the baseline of the number — no coloured icon tile in the
+ * corner, which is the one thing every generic stat card does.
+ */
+const TREND = {
+  up: { Icon: TrendingUp, chip: 'bg-noc-success/10 text-noc-success', label: 'Trending up' },
+  down: { Icon: TrendingDown, chip: 'bg-noc-warning/10 text-noc-warning', label: 'Trending down' },
 };
 
 export default function SummaryCard({ label, value, trend = 'neutral', icon: Icon }) {
-  const TrendIcon = trendIcons[trend] || Minus;
+  const meta = TREND[trend];
+  const TrendIcon = meta?.Icon;
 
   return (
-    <div className="card group transition-all hover:border-noc-accent/30 hover:shadow-glow">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-noc-muted">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-noc-text">{value}</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {Icon && (
-            <div className="rounded-lg bg-noc-accent/10 p-2 text-noc-accent">
-              <Icon className="h-4 w-4" />
-            </div>
-          )}
-          <TrendIcon className={clsx('h-4 w-4', trendColors[trend])} />
-        </div>
+    <div className="card stat-glow">
+      <div className="flex items-center gap-1.5 text-noc-muted">
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />}
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em]">{label}</p>
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <p className="tabular text-2xl font-semibold leading-none tracking-tight text-noc-text sm:text-[1.75rem]">
+          {value}
+        </p>
+        {meta && (
+          <span
+            className={clsx(
+              'inline-flex shrink-0 items-center rounded-md px-1.5 py-1',
+              meta.chip
+            )}
+            title={meta.label}
+          >
+            <TrendIcon className="h-3.5 w-3.5" strokeWidth={2} />
+            <span className="sr-only">{meta.label}</span>
+          </span>
+        )}
       </div>
     </div>
   );
