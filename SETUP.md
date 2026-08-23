@@ -1,6 +1,6 @@
 # Core Insight — Setup Guide
 
-> **Already deployed:** <https://coreinsight.vercel.app> — sign in with
+> **Already deployed:** <https://bituinsight.vercel.app> — sign in with
 > `admin@coreinsight.local` / `admin123`. Follow this guide only if you want to run
 > your own copy. **Change that password before real data goes in** (see
 > [Security](#security-important)).
@@ -38,11 +38,11 @@ Then close and reopen your terminal, and run the check again.
 ### Get the code
 
 ```bash
-git clone https://github.com/bereket-09/CoreInsight.git
-cd CoreInsight
+git clone https://github.com/bereket-09/BituInsight.git
+cd BituInsight
 ```
 
-Every command in this guide assumes you are inside the `CoreInsight` folder.
+Every command in this guide assumes you are inside the `BituInsight` folder.
 
 ---
 
@@ -157,7 +157,7 @@ Open a **second** terminal window (`Cmd + T` on Mac, or a new PowerShell window)
 go back to the project folder, and run:
 
 ```bash
-cd CoreInsight/frontend
+cd BituInsight/frontend
 npm install
 npm run dev
 ```
@@ -327,4 +327,4 @@ than piling up new ones, and images older than `CHART_RETENTION_DAYS` (default 9
 are cleared automatically while the report itself is kept.
 
 Still stuck? Open an issue at
-<https://github.com/bereket-09/CoreInsight/issues> and paste the red error text.
+<https://github.com/bereket-09/BituInsight/issues> and paste the red error text.

@@ -189,9 +189,13 @@ body(
 
 h2('Access details');
 kvTable([
-  ['Live application', 'https://coreinsight.vercel.app'],
-  ['Source code', 'github.com/bereket-09/CoreInsight'],
+  ['Live application', 'https://bituinsight.vercel.app'],
+  ['Source code', 'github.com/bereket-09/BituInsight'],
   ['Repository owner', 'bereket-09 — private repository, access granted on request'],
+  [
+    'Note on naming',
+    'The repository and web address keep the project’s original name, BituInsight. The platform itself is Core Insight; the two refer to the same system.',
+  ],
   ['Setup guide', 'SETUP.md, in the repository root'],
 ]);
 
@@ -243,7 +247,7 @@ doc
   .font('Helvetica')
   .fontSize(8.5)
   .text(
-    'Questions or issues: open an issue at github.com/bereket-09/CoreInsight/issues, or contact the project maintainer.',
+    'Questions or issues: open an issue at github.com/bereket-09/BituInsight/issues, or contact the project maintainer.',
     M,
     doc.y,
     { width: W, lineGap: 2 }
