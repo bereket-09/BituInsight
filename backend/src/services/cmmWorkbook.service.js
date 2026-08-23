@@ -8,16 +8,19 @@ const logger = require('../utils/logger');
 const { readSheetRows } = require('./excelParser.service');
 const { validateStructure } = require('../kpi-workflows/telecom-metric/validator');
 const { TELECOM_METRIC_SLUG, validateReport, processReport } = require('./workflowEngine.service');
-const { DEFAULT_THRESHOLD_PERCENT } = require('../kpi-workflows/telecom-metric/constants');
+const { DEFAULT_THRESHOLD_PERCENT, isUnset } = require('../kpi-workflows/telecom-metric/constants');
 const chartStorage = require('./chartStorage.service');
 
 const CMM_HEADER_ROW = 0;
 const CMM_DATA_START_ROW = 2;
 
 function clampThreshold(value) {
+  // Zero is a valid target; the floor is 0, not 1. Unset is checked first because
+  // Number(null) and Number('') are both 0 and would look like a deliberate zero.
+  if (isUnset(value)) return DEFAULT_THRESHOLD_PERCENT;
   const n = Number(value);
   if (!Number.isFinite(n)) return DEFAULT_THRESHOLD_PERCENT;
-  return Math.min(100, Math.max(1, Math.round(n * 10) / 10));
+  return Math.min(100, Math.max(0, Math.round(n * 10) / 10));
 }
 
 function parseWorkbookThresholds(options = {}) {

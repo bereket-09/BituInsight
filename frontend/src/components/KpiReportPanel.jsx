@@ -12,6 +12,7 @@ import CmgThroughputExplorer from './CmgThroughputExplorer';
 import CmgThroughputDataTable from './CmgThroughputDataTable';
 import CmgThroughputInsight from './CmgThroughputInsight';
 import TrafficVolumeExplorer from './TrafficVolumeExplorer';
+import { parseTarget } from '../utils/parseTarget';
 
 export default function KpiReportPanel({ reportId, workbookId, threshold: initialThreshold = 99 }) {
   const queryClient = useQueryClient();
@@ -164,11 +165,11 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
             </label>
             <input
               type="number"
-              min={1}
+              min={0}
               max={100}
               step={0.1}
               value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value) || 99)}
+              onChange={(e) => setThreshold(parseTarget(e.target.value, 99))}
               className="input-field w-28"
             />
           </div>

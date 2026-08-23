@@ -3,6 +3,7 @@ import { Presentation, CheckSquare, Square, X, Sun, Moon } from 'lucide-react';
 import clsx from 'clsx';
 import { workbookApi } from '../api';
 import { downloadBlob } from '../utils/downloadBlob';
+import { parseTarget } from '../utils/parseTarget';
 
 const PPT_THEME_KEY = 'bituinsight_ppt_theme';
 
@@ -86,10 +87,9 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
   };
 
   const setKpiThreshold = (reportId, value) => {
-    const n = Number(value);
     setThresholds((prev) => ({
       ...prev,
-      [reportId]: Number.isFinite(n) ? n : defaultThreshold,
+      [reportId]: parseTarget(value, defaultThreshold),
     }));
   };
 
@@ -252,12 +252,12 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={100}
                     step={0.1}
                     value={deckDefault}
                     onChange={(e) =>
-                      setDeckDefault(Number(e.target.value) || defaultThreshold)
+                      setDeckDefault(parseTarget(e.target.value, defaultThreshold))
                     }
                     className="input-field w-28"
                   />
@@ -318,7 +318,7 @@ export default function PptExportPanel({ workbookId, workbook, sortedKpis }) {
                         </label>
                         <input
                           type="number"
-                          min={1}
+                          min={0}
                           max={100}
                           step={0.1}
                           disabled={!isOn}

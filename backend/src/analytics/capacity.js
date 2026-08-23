@@ -32,10 +32,26 @@ function analyzeCapacity(points, trend, options = {}) {
     saturationDate: null,
   };
 
-  const threshold = Number(options.threshold);
-  if (!Number.isFinite(threshold) || threshold <= 0) return result;
+  // Unset is checked before conversion: Number(null) and Number('') are both 0,
+  // which would otherwise be read as a deliberate target of zero.
+  const rawThreshold = options.threshold;
+  const thresholdUnset =
+    rawThreshold === null || rawThreshold === undefined || rawThreshold === '';
+  const threshold = Number(rawThreshold);
+  if (thresholdUnset || !Number.isFinite(threshold) || threshold < 0) return result;
 
   result.threshold = round(threshold);
+
+  // A target of zero is meaningful ("we want none of this"), but the ratios below
+  // divide by it. Report the pass/fail state directly instead of dividing.
+  if (threshold === 0) {
+    const breached = planningPeak > 0;
+    result.headroomPct = breached ? 0 : 100;
+    result.utilizationPct = breached ? 100 : 0;
+    result.atZeroTarget = true;
+    return result;
+  }
+
   result.headroomPct = round(((threshold - planningPeak) / threshold) * 100, 1);
   result.utilizationPct = round((planningPeak / threshold) * 100, 1);
 

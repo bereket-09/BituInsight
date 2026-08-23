@@ -66,24 +66,6 @@ export default function Layout() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4 lg:px-3">
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={clsx(
-            'mb-2 hidden w-full items-center rounded-lg text-noc-muted transition-colors hover:bg-noc-card hover:text-noc-text lg:flex',
-            collapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-2'
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4 shrink-0" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-4 w-4 shrink-0" />
-              <span className="text-sm">Collapse</span>
-            </>
-          )}
-        </button>
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
