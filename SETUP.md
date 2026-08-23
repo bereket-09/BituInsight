@@ -292,16 +292,70 @@ provider's dashboard.
 
 ## Optional: turn on AI-written summaries
 
-Every report always gets a written summary calculated from the numbers. If you add
-an Anthropic API key, that summary is instead written by Claude — more readable,
-with suggested next steps.
+Every report always gets a written summary calculated from the numbers. Point the
+platform at a language model and that summary is written by the model instead —
+more readable, with suggested next steps.
 
-1. Get a key at <https://console.anthropic.com>.
-2. Add it:
-   - **Local:** add `ANTHROPIC_API_KEY=sk-ant-...` to your `.env` file.
-   - **Cloud:** run `vercel env add ANTHROPIC_API_KEY production`, then redeploy.
+You are not tied to one vendor. Core Insight talks the OpenAI Chat Completions
+format, which OpenAI, Ollama, LM Studio, vLLM, Groq, Together and OpenRouter all
+accept, and it keeps a native path for Anthropic. Pick whichever you like — or
+run a model on your own machine and send nothing to anyone.
 
-Without a key nothing breaks — you just get the calculated summary instead.
+### The short version
+
+Set two variables and restart:
+
+```bash
+LLM_PROVIDER=groq
+LLM_API_KEY=your-api-key-here
+```
+
+**Cloud:** `vercel env add LLM_PROVIDER production` and
+`vercel env add LLM_API_KEY production`, then redeploy. Keys belong in your
+host's environment settings — never in a file you commit.
+
+### Common setups
+
+| What you want | Settings |
+|---|---|
+| Groq (fast, hosted) | `LLM_PROVIDER=groq` + `LLM_API_KEY=...` |
+| OpenAI | `LLM_PROVIDER=openai` + `LLM_API_KEY=sk-...` |
+| Claude | `LLM_PROVIDER=anthropic` + `LLM_API_KEY=sk-ant-...` |
+| Ollama on your own machine | `LLM_PROVIDER=ollama` — no key needed |
+| Anything else OpenAI-compatible | `LLM_PROVIDER=openai` + `LLM_BASE_URL=https://your-endpoint/v1` + `LLM_MODEL=...` |
+| Off | `LLM_PROVIDER=none`, or set nothing at all |
+
+Each provider has a default model, so `LLM_MODEL` is optional:
+`groq` → `openai/gpt-oss-120b`, `openai` → `gpt-4o-mini`, `ollama` → `llama3.1`,
+`anthropic` → `claude-opus-5`.
+
+### All the variables
+
+| Variable | Default | What it does |
+|---|---|---|
+| `LLM_PROVIDER` | `auto` | Provider name, or `none` to switch the feature off. Unlisted names are treated as generic OpenAI-compatible endpoints. |
+| `LLM_API_KEY` | — | Your key. The vendor's own variable (`OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`) works too. |
+| `LLM_MODEL` | per provider | Model id. |
+| `LLM_BASE_URL` | per provider | Endpoint override, for self-hosted or unlisted providers. |
+| `LLM_TIMEOUT_MS` | `30000` | Total budget for one summary, retries included. |
+| `LLM_MAX_RETRIES` | `1` | Retries on a transient provider error. |
+| `LLM_MAX_TOKENS` | unset | Cap on summary length. Rarely needed. |
+
+`auto` means: use the generic `LLM_*` settings if present, otherwise fall back to
+whichever vendor key it finds. An existing `ANTHROPIC_API_KEY` on its own still
+selects Claude exactly as it did before, so nothing to change if that is your
+current setup.
+
+### If the model can't be reached
+
+Nothing breaks. If the key is wrong, the host is down, the request times out, or
+the model returns something unusable, the report quietly keeps the calculated
+summary and logs why. A local Ollama that isn't running will never hold up an
+upload — the request is abandoned after `LLM_TIMEOUT_MS`.
+
+**What gets sent:** only the derived statistics — the KPI name, the trend and
+level numbers, the data-quality score and the list of findings. Raw spreadsheet
+rows, PLMN records and anything identifying a customer never leave the server.
 
 ---
 
@@ -319,6 +373,7 @@ Without a key nothing breaks — you just get the calculated summary instead.
 | Charts render but have no text | The font files didn't ship | Confirm `backend/assets/fonts/*.ttf` exist; on a cloud host they must be in `includeFiles` in `vercel.json` |
 | Reports have no chart images at all | Rendering is switched off | Make sure `DISABLE_CHART_RENDERING` is **not** set to `true` |
 | Upload rejected on the cloud, works locally | File is over the host's request limit | Vercel caps uploads at about 4.5 MB; use a Docker install for larger exports |
+| Summaries say "Computed" instead of being AI-written | The model wasn't reachable, or isn't configured | Check the backend log for `Narrative generation failed`; confirm `LLM_PROVIDER` and `LLM_API_KEY`. Reports are never blocked by this |
 
 **Where chart images live:** charts are rendered on the server and the PNG bytes
 are stored in the database, so they survive on hosts with no permanent disk. Each
