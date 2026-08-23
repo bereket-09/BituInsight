@@ -10,6 +10,21 @@ export const workflowApi = {
   get: (slug) => client.get(`/workflows/${slug}`),
 };
 
+/**
+ * Database-defined workflows. `validate` is a dry run: it answers 200 with
+ * `valid: false` and the error list rather than throwing, so the caller renders
+ * problems the same way whether the JSON was malformed or merely wrong.
+ */
+export const workflowDefinitionApi = {
+  list: () => client.get('/workflow-definitions'),
+  get: (slug) => client.get(`/workflow-definitions/${slug}`),
+  validate: (definition) => client.post('/workflow-definitions/validate', { definition }),
+  import: (definition) => client.post('/workflow-definitions/import', { definition }),
+  remove: (slug) => client.delete(`/workflow-definitions/${slug}`),
+  example: (name) =>
+    client.get(`/workflow-definitions/examples/${name}`, { responseType: 'blob' }),
+};
+
 function appendParseOptions(formData, options = {}) {
   if (options.sheetName) formData.append('sheetName', options.sheetName);
   if (options.sheetIndex != null) formData.append('sheetIndex', String(options.sheetIndex));
@@ -84,4 +99,9 @@ export const workbookApi = {
     client.patch(`/workbooks/${workbookId}/kpis/${reportId}/threshold`, { threshold }),
   downloadPresentation: (workbookId, payload = {}) =>
     client.post(`/workbooks/${workbookId}/export/pptx`, payload, { responseType: 'blob' }),
+};
+
+// The read-only MCP server's tool catalogue and access posture, for Settings.
+export const mcpApi = {
+  connection: () => client.get('/mcp/connection'),
 };

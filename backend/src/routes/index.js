@@ -1,9 +1,11 @@
 const { Router } = require('express');
 const authController = require('../controllers/auth.controller');
 const workflowController = require('../controllers/workflow.controller');
+const workflowDefinitionController = require('../controllers/workflowDefinition.controller');
 const reportController = require('../controllers/report.controller');
 const aggregationController = require('../controllers/aggregation.controller');
 const workbookController = require('../controllers/workbook.controller');
+const mcpController = require('../controllers/mcp.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { upload } = require('../middleware/upload.middleware');
 
@@ -18,6 +20,36 @@ router.get('/auth/me', authenticate, authController.me);
 
 router.get('/workflows', authenticate, workflowController.listWorkflows);
 router.get('/workflows/:slug', authenticate, workflowController.getWorkflowDetails);
+
+// Database-defined workflows. The literal paths are declared before '/:slug' so an
+// example download is never read as a slug lookup.
+router.get('/workflow-definitions', authenticate, workflowDefinitionController.listDefinitions);
+router.get(
+  '/workflow-definitions/examples/:name',
+  authenticate,
+  workflowDefinitionController.getExample
+);
+router.post(
+  '/workflow-definitions/validate',
+  authenticate,
+  workflowDefinitionController.validateImport
+);
+router.post(
+  '/workflow-definitions/import',
+  authenticate,
+  workflowDefinitionController.importDefinition
+);
+router.get('/workflow-definitions/:slug', authenticate, workflowDefinitionController.getDefinition);
+router.delete(
+  '/workflow-definitions/:slug',
+  authenticate,
+  workflowDefinitionController.removeDefinition
+);
+
+// What the platform knows about its own read-only MCP server, for the connect
+// section in Settings. Reports no live client: an MCP client runs the server
+// itself, on the user's machine, over stdio.
+router.get('/mcp/connection', authenticate, mcpController.getConnectionInfo);
 
 router.get('/dashboard', authenticate, reportController.getDashboard);
 router.get('/reports', authenticate, reportController.listReports);

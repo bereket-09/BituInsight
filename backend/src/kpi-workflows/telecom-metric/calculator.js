@@ -34,7 +34,13 @@ function calculate(transformed, context = {}) {
     plmnName: r.plmnName,
   }));
 
-  const timeSeriesRaw = buildTimeSeries(recordsForTs);
+  // A percentage is an average, not a total: summing 96 samples of a 99% KPI
+  // into a daily bucket produced 9504. valueType is already known here, so the
+  // bucketed views are built with the right operation instead of being corrected
+  // afterwards by every consumer.
+  const timeSeriesRaw = buildTimeSeries(recordsForTs, {
+    aggregate: valueType === 'percent' ? 'avg' : 'sum',
+  });
   const primary = timeSeriesRaw.series.primary.map((p) => ({
     ...p,
     value: p.total,

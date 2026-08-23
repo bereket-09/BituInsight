@@ -10,6 +10,7 @@ import ChartCard from './ChartCard';
 import MetricExplorer from './MetricExplorer';
 import CmgThroughputExplorer from './CmgThroughputExplorer';
 import CmgThroughputDataTable from './CmgThroughputDataTable';
+import SeriesDataTable from './SeriesDataTable';
 import CmgThroughputInsight from './CmgThroughputInsight';
 import TrafficVolumeExplorer from './TrafficVolumeExplorer';
 import { parseTarget } from '../utils/parseTarget';
@@ -19,10 +20,17 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
   const [threshold, setThreshold] = useState(initialThreshold);
   const [thresholdMsg, setThresholdMsg] = useState('');
   const [downloading, setDownloading] = useState(false);
+  // Owned here so the KPI's chart and its data-point list share one granularity.
+  const [spanId, setSpanId] = useState(null);
 
   useEffect(() => {
     setThreshold(initialThreshold);
   }, [initialThreshold, reportId]);
+
+  // A different KPI has its own cadence; let its own recommendation win.
+  useEffect(() => {
+    setSpanId(null);
+  }, [reportId]);
 
   const { data: report, isLoading } = useQuery({
     queryKey: ['report', reportId],
@@ -98,6 +106,7 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
   }));
 
   const kpiLabel = (report.kpi_name || summary.kpiName || 'kpi').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const isPercentKpi = valueType === 'percent';
 
   const handleDownloadJson = async () => {
     setDownloading(true);
@@ -225,6 +234,8 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
             timeSeries={timeSeries}
             summary={summary}
             calculated={calculated}
+            spanId={spanId}
+            onSpanChange={setSpanId}
           />
         ) : report.workflow_slug === 'telecom-metric' || valueType === 'percent' ? (
           <MetricExplorer
@@ -232,9 +243,15 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
             kpiName={report.kpi_name || summary.kpiName}
             valueType={valueType}
             threshold={activeThreshold}
+            spanId={spanId}
+            onSpanChange={setSpanId}
           />
         ) : (
-          <TrafficVolumeExplorer timeSeries={timeSeries} />
+          <TrafficVolumeExplorer
+            timeSeries={timeSeries}
+            spanId={spanId}
+            onSpanChange={setSpanId}
+          />
         ))}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -250,39 +267,28 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
         ))}
       </div>
 
-      {report.workflow_slug === 'cmg-data-throughput' && timeSeries && (
-        <CmgThroughputDataTable timeSeries={timeSeries} filePrefix={`${kpiLabel}_${reportId}`} />
-      )}
-
-      {report.workflow_slug !== 'cmg-data-throughput' &&
-        report.workflow_slug !== 'traffic-volume' &&
+      {report.workflow_slug === 'cmg-data-throughput' && timeSeries ? (
+        <CmgThroughputDataTable
+          timeSeries={timeSeries}
+          spanId={spanId}
+          onSpanChange={setSpanId}
+          filePrefix={`${kpiLabel}-${reportId}`}
+        />
+      ) : (
         timeSeries?.series?.primary?.length > 0 && (
-          <div className="card overflow-x-auto">
-            <h3 className="mb-4 text-sm font-semibold">
-              Data table ({timeSeries.detected?.label})
-            </h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-noc-border text-left text-xs text-noc-muted">
-                  <th className="pb-2 pr-4">Period</th>
-                  <th className="pb-2">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {timeSeries.series.primary.map((row) => (
-                  <tr key={row.timestamp || row.label} className="border-b border-noc-border/30">
-                    <td className="py-2 pr-4 font-medium">{row.label}</td>
-                    <td className="py-2 font-mono">
-                      {valueType === 'percent'
-                        ? `${(row.value ?? row.total)?.toFixed(2)}%`
-                        : (row.value ?? row.total)?.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <SeriesDataTable
+            timeSeries={timeSeries}
+            spanId={spanId}
+            onSpanChange={setSpanId}
+            title="Data points"
+            unit={isPercentKpi ? '%' : calculated.metrics?.unit}
+            valueLabel={report.kpi_name || summary.kpiName || 'Value'}
+            percentOnly={isPercentKpi}
+            fileNameParts={[kpiLabel, reportId, 'data-points']}
+            highlightTimestamp={timeSeries.peak?.timestamp}
+          />
+        )
+      )}
     </div>
   );
 }

@@ -14,10 +14,12 @@ import {
   ReferenceLine,
 } from 'recharts';
 import clsx from 'clsx';
-import { Calendar, Layers, Filter, Maximize2 } from 'lucide-react';
+import { Calendar, Layers, Maximize2 } from 'lucide-react';
 import { useChartTheme } from '../hooks/useChartTheme';
+import { useSpanState } from '../hooks/useSpanState';
 import { useTheme } from '../context/ThemeContext';
 import ChartFullscreenModal from './ChartFullscreenModal';
+import GranularityControl from './GranularityControl';
 
 function formatVol(v) {
   const n = Number(v);
@@ -195,13 +197,24 @@ function VolumeChart({
   );
 }
 
-export default function TrafficVolumeExplorer({ timeSeries, className }) {
+export default function TrafficVolumeExplorer({
+  timeSeries,
+  spanId,
+  onSpanChange,
+  className,
+}) {
   const chartTheme = useChartTheme();
   const { isDark } = useTheme();
   const detected = timeSeries?.detected;
-  const spans = timeSeries?.availableSpans;
 
-  const [spanId, setSpanId] = useState(spans?.auto || 'daily');
+  // Shared with the data table below when the page owns the selection.
+  const {
+    options: spanOptions,
+    spanId: activeSpanId,
+    setSpanId,
+    series: rawSeries,
+  } = useSpanState(timeSeries, { spanId, onSpanChange });
+
   const [chartMode, setChartMode] = useState('line');
   const [visible, setVisible] = useState({ volume2g3g: true, volume4g: true, total: true });
   const [rangeStart, setRangeStart] = useState('');
@@ -213,18 +226,6 @@ export default function TrafficVolumeExplorer({ timeSeries, className }) {
     { key: 'volume4g', label: '4G', color: chartTheme.series.volume4g },
     { key: 'total', label: 'Total', color: chartTheme.series.total },
   ];
-
-  const rawSeries = useMemo(() => {
-    if (!timeSeries?.series) return [];
-    const map = {
-      native: timeSeries.series.native,
-      hourly: timeSeries.series.hourly,
-      daily: timeSeries.series.daily,
-      weekly: timeSeries.series.weekly,
-      monthly: timeSeries.series.monthly,
-    };
-    return map[spanId] || timeSeries.series.primary || [];
-  }, [timeSeries, spanId]);
 
   const chartData = useMemo(() => {
     let data = rawSeries.map((p) => ({
@@ -251,28 +252,19 @@ export default function TrafficVolumeExplorer({ timeSeries, className }) {
 
   const controls = (
     <>
-      <div className="flex flex-wrap gap-3">
-        <div className="min-w-[160px] flex-1">
-          <label className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-noc-muted">
-            <Filter className="h-3 w-3" /> Time span
-          </label>
-          <select
-            value={spanId}
-            onChange={(e) => {
-              setSpanId(e.target.value);
-              setRangeStart('');
-              setRangeEnd('');
-            }}
-            className="input-field text-sm"
-          >
-            {spans?.options?.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-                {opt.id === spans.auto ? ' (auto)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+        <GranularityControl
+          options={spanOptions}
+          value={activeSpanId}
+          onChange={(next) => {
+            setSpanId(next);
+            // The period pickers list this span's own points, so a leftover
+            // selection from another span would silently filter everything out.
+            setRangeStart('');
+            setRangeEnd('');
+          }}
+          label="Granularity"
+        />
         <div className="min-w-[140px]">
           <label className="mb-1 text-[10px] font-medium uppercase tracking-wider text-noc-muted">
             From

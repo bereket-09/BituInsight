@@ -1,5 +1,20 @@
 const pool = require('../db/pool');
-const { getAllWorkflows, getWorkflow } = require('../kpi-workflows/registry');
+const { getAllWorkflows, resolveWorkflow, isBuiltIn } = require('../kpi-workflows/registry');
+
+/**
+ * Resolve a catalogue row to its runtime workflow. `resolveWorkflow` also warms the
+ * definition cache on a cold instance, which is what lets an imported workflow show
+ * its columns and charts here immediately after import. A slug with no module and no
+ * definition simply has nothing to describe — that is a catalogue row without an
+ * implementation, not a request failure.
+ */
+async function describeSafely(slug) {
+  try {
+    return await resolveWorkflow(slug);
+  } catch {
+    return null;
+  }
+}
 
 async function listWorkflows(req, res, next) {
   try {
@@ -8,17 +23,20 @@ async function listWorkflows(req, res, next) {
     );
 
     const codeWorkflows = getAllWorkflows();
-    const merged = dbResult.rows.map((db) => {
-      const code = codeWorkflows.find((c) => c.slug === db.slug);
-      const dbMeta = db.metadata && typeof db.metadata === 'object' ? db.metadata : {};
-      return {
-        ...db,
-        description: db.description || code?.description,
-        requiredColumns: code?.requiredColumns || [],
-        chartDefinitions: code?.chartDefinitions || [],
-        metadata: { ...code?.metadata, ...dbMeta },
-      };
-    });
+    const merged = await Promise.all(
+      dbResult.rows.map(async (db) => {
+        const code = codeWorkflows.find((c) => c.slug === db.slug) || (await describeSafely(db.slug));
+        const dbMeta = db.metadata && typeof db.metadata === 'object' ? db.metadata : {};
+        return {
+          ...db,
+          description: db.description || code?.description,
+          requiredColumns: code?.requiredColumns || [],
+          chartDefinitions: code?.chartDefinitions || [],
+          metadata: { ...code?.metadata, ...dbMeta },
+          source: isBuiltIn(db.slug) ? 'builtin' : code ? code.source : 'unknown',
+        };
+      })
+    );
 
     res.json({ workflows: merged });
   } catch (err) {
@@ -29,7 +47,9 @@ async function listWorkflows(req, res, next) {
 async function getWorkflowDetails(req, res, next) {
   try {
     const { slug } = req.params;
-    const workflow = getWorkflow(slug);
+    // Async resolve so a database-defined workflow is found on a cold instance whose
+    // definition cache has not been warmed yet.
+    const workflow = await resolveWorkflow(slug);
 
     const dbResult = await pool.query(
       'SELECT id, slug, name, description, version, metadata FROM kpi_workflows WHERE slug = $1',

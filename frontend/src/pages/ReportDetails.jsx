@@ -20,6 +20,7 @@ import TrafficVolumeExplorer from '../components/TrafficVolumeExplorer';
 import MetricExplorer from '../components/MetricExplorer';
 import CmgThroughputExplorer from '../components/CmgThroughputExplorer';
 import CmgThroughputDataTable from '../components/CmgThroughputDataTable';
+import SeriesDataTable from '../components/SeriesDataTable';
 import CmgThroughputInsight from '../components/CmgThroughputInsight';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ReportPptExportButton from '../components/ReportPptExportButton';
@@ -136,6 +137,9 @@ export default function ReportDetails() {
   const [teamsMessage, setTeamsMessage] = useState('');
   const [teamsOk, setTeamsOk] = useState(false);
   const [pngPreview, setPngPreview] = useState(null);
+  // One granularity for the whole report: the chart and the data-point list below
+  // it read the same span, so they can never show different numbers.
+  const [spanId, setSpanId] = useState(null);
 
   useEffect(() => {
     return () => {
@@ -226,6 +230,9 @@ export default function ReportDetails() {
   const metrics = calculated.metrics || {};
   const isProcessing = ['pending', 'validating', 'processing'].includes(report.status);
   const timeSeries = calculated.timeSeries || reportData.tables?.timeSeries;
+  const valueType = calculated.valueType || calculated.metrics?.valueType;
+  const isPercentKpi = valueType === 'percent';
+  const kpiLabel = report.kpi_name || summary.kpiName || report.workflow_name;
 
   const chartConfigs = report.charts?.map((chart) => {
     const config = typeof chart.config === 'string' ? JSON.parse(chart.config) : chart.config;
@@ -405,17 +412,25 @@ export default function ReportDetails() {
               {report.workflow_slug === 'telecom-metric' ? (
                 <MetricExplorer
                   timeSeries={timeSeries}
-                  kpiName={report.kpi_name || summary.kpiName}
-                  valueType={calculated.valueType || calculated.metrics?.valueType}
+                  kpiName={kpiLabel}
+                  valueType={valueType}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
                 />
               ) : report.workflow_slug === 'cmg-data-throughput' ? (
                 <CmgThroughputExplorer
                   timeSeries={timeSeries}
                   summary={summary}
                   calculated={calculated}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
                 />
               ) : (
-                <TrafficVolumeExplorer timeSeries={timeSeries} />
+                <TrafficVolumeExplorer
+                  timeSeries={timeSeries}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                />
               )}
             </Section>
           )}
@@ -442,58 +457,39 @@ export default function ReportDetails() {
             </Section>
           )}
 
-          {report.workflow_slug === 'traffic-volume' &&
-            reportData.tables?.timeSeries?.series?.primary && (
+          {/* ——— The data points behind the charts ——— */}
+          {report.workflow_slug === 'cmg-data-throughput' && timeSeries ? (
+            <Section
+              title="Data points"
+              variant="quiet"
+              meta={timeSeries.detected?.spanLabel}
+            >
+              <CmgThroughputDataTable
+                timeSeries={timeSeries}
+                spanId={spanId}
+                onSpanChange={setSpanId}
+                filePrefix={`${kpiLabel}-${id}`}
+              />
+            </Section>
+          ) : (
+            timeSeries?.series?.primary?.length > 0 && (
               <Section
-                title="Time series data"
+                title="Data points"
                 variant="quiet"
-                meta={reportData.tables.timeSeries.detected?.label}
+                meta={timeSeries.detected?.spanLabel}
               >
-                <div className="card overflow-hidden p-0">
-                  <div className="overflow-x-auto">
-                    <table className="tabular w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-noc-border bg-noc-bg/40 text-left text-[10px] uppercase tracking-[0.12em] text-noc-muted">
-                          <th className="px-5 py-3 font-medium">Period</th>
-                          <th className="px-5 py-3 font-medium">2G+3G</th>
-                          <th className="px-5 py-3 font-medium">4G</th>
-                          <th className="px-5 py-3 font-medium">Total</th>
-                          <th className="px-5 py-3 font-medium">4G share</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportData.tables.timeSeries.series.primary.map((row) => (
-                          <tr
-                            key={row.timestamp}
-                            className="border-b border-noc-border/40 transition-colors last:border-0 hover:bg-noc-accent/[0.04]"
-                          >
-                            <td className="px-5 py-2.5 font-medium text-noc-text">{row.label}</td>
-                            <td className="px-5 py-2.5 font-mono text-xs text-noc-textDim">
-                              {row.volume2g3g?.toLocaleString()}
-                            </td>
-                            <td className="px-5 py-2.5 font-mono text-xs text-noc-textDim">
-                              {row.volume4g?.toLocaleString()}
-                            </td>
-                            <td className="px-5 py-2.5 font-mono text-xs font-semibold text-noc-text">
-                              {row.total?.toLocaleString()}
-                            </td>
-                            <td className="px-5 py-2.5 font-mono text-xs text-noc-accent">
-                              {row.contribution4gPct}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <SeriesDataTable
+                  timeSeries={timeSeries}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                  unit={isPercentKpi ? '%' : metrics?.unit}
+                  valueLabel={kpiLabel}
+                  percentOnly={isPercentKpi}
+                  fileNameParts={[kpiLabel, id, 'data-points']}
+                  highlightTimestamp={timeSeries.peak?.timestamp}
+                />
               </Section>
-            )}
-
-          {report.workflow_slug === 'cmg-data-throughput' && timeSeries && (
-            <CmgThroughputDataTable
-              timeSeries={timeSeries}
-              filePrefix={`${(report.kpi_name || summary.kpiName || 'cmg-throughput').replace(/[^a-zA-Z0-9_-]+/g, '_')}_${id}`}
-            />
+            )
           )}
 
           <Section title="Distribution" variant="quiet">

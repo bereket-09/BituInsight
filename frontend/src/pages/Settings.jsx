@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Check, Save, Webhook, User } from 'lucide-react';
+import { Check, Plug, Save, Webhook, User } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
+import McpConnectPanel from '../components/McpConnectPanel';
 
 const ICON_STROKE = 1.75;
 
@@ -109,6 +110,14 @@ export default function Settings() {
             {saved ? 'Saved' : ''}
           </span>
         </div>
+      </SettingsSection>
+
+      <SettingsSection
+        icon={Plug}
+        title="AI assistant access"
+        description="Connect an MCP client so an AI assistant can query your reports and findings, read-only."
+      >
+        <McpConnectPanel />
       </SettingsSection>
     </div>
   );

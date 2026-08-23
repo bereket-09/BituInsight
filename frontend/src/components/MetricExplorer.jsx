@@ -16,7 +16,9 @@ import {
 import clsx from 'clsx';
 import { Filter, Maximize2 } from 'lucide-react';
 import { useChartTheme } from '../hooks/useChartTheme';
+import { useSpanState } from '../hooks/useSpanState';
 import ChartFullscreenModal from './ChartFullscreenModal';
+import GranularityControl from './GranularityControl';
 
 function formatValue(v, valueType) {
   const n = Number(v);
@@ -47,18 +49,37 @@ function MetricTooltip({ active, payload, label, valueType, theme }) {
   );
 }
 
-export default function MetricExplorer({ timeSeries, kpiName, valueType = 'percent', threshold = 99 }) {
+export default function MetricExplorer({
+  timeSeries,
+  kpiName,
+  valueType = 'percent',
+  threshold = 99,
+  spanId,
+  onSpanChange,
+}) {
   const targetThreshold = valueType === 'percent' ? Number(threshold) || 99 : null;
   const chartTheme = useChartTheme();
   const [chartMode, setChartMode] = useState('area');
   const [spanFilter, setSpanFilter] = useState('all');
   const [fullscreen, setFullscreen] = useState(false);
 
-  const primary = timeSeries?.series?.primary || [];
+  // A percentage cannot be summed into an hour or a day, so its coarser views are
+  // means over the raw points rather than the backend's summed buckets.
+  const {
+    options: spanOptions,
+    spanId: activeSpanId,
+    setSpanId,
+    series: activeSeries,
+    activeOption,
+  } = useSpanState(timeSeries, {
+    spanId,
+    onSpanChange,
+  });
+
   const detected = timeSeries?.detected || {};
 
   const chartData = useMemo(() => {
-    let data = primary.map((p) => ({
+    let data = activeSeries.map((p) => ({
       label: p.label,
       value: p.value ?? p.total ?? 0,
       timestamp: p.timestamp,
@@ -66,7 +87,7 @@ export default function MetricExplorer({ timeSeries, kpiName, valueType = 'perce
     if (spanFilter === 'last24' && data.length > 96) data = data.slice(-96);
     if (spanFilter === 'last7d' && data.length > 672) data = data.slice(-672);
     return data;
-  }, [primary, spanFilter]);
+  }, [activeSeries, spanFilter]);
 
   const avg =
     chartData.length > 0
@@ -138,8 +159,9 @@ export default function MetricExplorer({ timeSeries, kpiName, valueType = 'perce
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">{kpiName || 'KPI trend'}</h3>
-          <p className="text-xs text-noc-muted">
-            {detected.label} · {detected.spanLabel} · {detected.pointCount} points
+          <p className="tabular text-xs text-noc-muted">
+            {detected.spanLabel} · {activeOption?.name || detected.label}
+            {activeOption?.computed && ' (averaged)'} · {chartData.length} points
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -179,6 +201,7 @@ export default function MetricExplorer({ timeSeries, kpiName, valueType = 'perce
           </button>
         </div>
       </div>
+      <GranularityControl options={spanOptions} value={activeSpanId} onChange={setSpanId} />
       {chartBody}
       <ChartFullscreenModal
         open={fullscreen}

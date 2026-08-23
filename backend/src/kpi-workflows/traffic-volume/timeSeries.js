@@ -75,12 +75,20 @@ function bucketKey(date, bucket) {
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
   }
   if (bucket === 'day') {
-    return d.toISOString().split('T')[0];
+    // Local, to match the hour bucket above and the labels the user sees.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
   }
   if (bucket === 'week') {
-    const start = new Date(d);
-    start.setDate(d.getDate() - d.getDay());
-    return start.toISOString().split('T')[0];
+    // Normalise to local midnight before shifting back to the week start.
+    // Keeping the row's time of day and then reading a UTC date string put rows
+    // from one week into several buckets, which is why a three-day file could
+    // advertise four weeks.
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
+    return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
+      start.getDate()
+    ).padStart(2, '0')}`;
   }
   if (bucket === 'month') {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -88,7 +96,37 @@ function bucketKey(date, bucket) {
   return d.toISOString();
 }
 
-function aggregateRecords(records, bucket, granularityKey) {
+const AGGREGATES = ['sum', 'avg', 'min', 'max'];
+
+/**
+ * Combine the values collected for one bucket.
+ *
+ * Summing is right for a volume and wrong for a rate: adding 96 samples of a 99%
+ * availability KPI yields 9504, not 99. Callers whose metric is an average — a
+ * percentage, a ratio, a max-rate — pass 'avg' instead.
+ */
+function resolveAggregate(acc, mode) {
+  if (!acc.count) return 0;
+  if (mode === 'avg') return acc.sum / acc.count;
+  if (mode === 'min') return acc.min;
+  if (mode === 'max') return acc.max;
+  return acc.sum;
+}
+
+function accumulate(acc, value) {
+  acc.sum += value;
+  acc.count += 1;
+  acc.min = acc.count === 1 ? value : Math.min(acc.min, value);
+  acc.max = acc.count === 1 ? value : Math.max(acc.max, value);
+  return acc;
+}
+
+function newAccumulator() {
+  return { sum: 0, count: 0, min: 0, max: 0 };
+}
+
+function aggregateRecords(records, bucket, granularityKey, aggregate = 'sum') {
+  const mode = AGGREGATES.includes(aggregate) ? aggregate : 'sum';
   const map = new Map();
 
   for (const r of records) {
@@ -98,16 +136,16 @@ function aggregateRecords(records, bucket, granularityKey) {
         bucketKey: key,
         timestamp: r.date.toISOString(),
         date: new Date(r.date),
-        volume2g3g: 0,
-        volume4g: 0,
-        total: 0,
+        acc2g3g: newAccumulator(),
+        acc4g: newAccumulator(),
+        accTotal: newAccumulator(),
         count: 0,
       });
     }
     const pt = map.get(key);
-    pt.volume2g3g += r.volume2g3g;
-    pt.volume4g += r.volume4g;
-    pt.total += r.totalVolume;
+    accumulate(pt.acc2g3g, r.volume2g3g);
+    accumulate(pt.acc4g, r.volume4g);
+    accumulate(pt.accTotal, r.totalVolume);
     pt.count += 1;
     if (r.date > pt.date) pt.date = new Date(r.date);
     if (r.date < new Date(pt.timestamp)) pt.timestamp = r.date.toISOString();
@@ -115,7 +153,20 @@ function aggregateRecords(records, bucket, granularityKey) {
 
   return [...map.values()]
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-    .map((pt) => finalizePoint(pt, granularityKey));
+    .map((pt) =>
+      finalizePoint(
+        {
+          bucketKey: pt.bucketKey,
+          timestamp: pt.timestamp,
+          date: pt.date,
+          count: pt.count,
+          volume2g3g: resolveAggregate(pt.acc2g3g, mode),
+          volume4g: resolveAggregate(pt.acc4g, mode),
+          total: resolveAggregate(pt.accTotal, mode),
+        },
+        granularityKey
+      )
+    );
 }
 
 function finalizePoint(pt, granularityKey) {
@@ -197,15 +248,23 @@ function formatVolume(gb) {
   return `${gb.toFixed(2)} G`;
 }
 
-function buildTimeSeries(records) {
+/**
+ * @param {Array}  records
+ * @param {Object} [options]
+ * @param {'sum'|'avg'|'min'|'max'} [options.aggregate='sum']
+ *        How to combine records that fall in the same bucket. Volumes add up;
+ *        rates and percentages must be averaged.
+ */
+function buildTimeSeries(records, options = {}) {
+  const aggregate = options.aggregate || 'sum';
   const sorted = [...records].sort((a, b) => a.date - b.date);
   const detected = detectGranularity(sorted);
 
   const native = buildNativeSeries(sorted, detected.key);
-  const byHour = aggregateRecords(sorted, 'hour', 'hourly');
-  const byDay = aggregateRecords(sorted, 'day', 'daily');
-  const byWeek = aggregateRecords(sorted, 'week', 'weekly');
-  const byMonth = aggregateRecords(sorted, 'month', 'monthly');
+  const byHour = aggregateRecords(sorted, 'hour', 'hourly', aggregate);
+  const byDay = aggregateRecords(sorted, 'day', 'daily', aggregate);
+  const byWeek = aggregateRecords(sorted, 'week', 'weekly', aggregate);
+  const byMonth = aggregateRecords(sorted, 'month', 'monthly', aggregate);
 
   let primarySeries = native;
   if (detected.bucket === 'hour') primarySeries = byHour.length ? byHour : native;
