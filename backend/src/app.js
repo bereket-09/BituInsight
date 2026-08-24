@@ -18,6 +18,27 @@ const app = express();
   }
 });
 
+// The OAuth authorization server sits at the application root, not under /api:
+// RFC 8414 and RFC 9728 both put their discovery documents under /.well-known at
+// the origin, and an MCP client that has only been given the site's URL has no
+// other way to find them.
+//
+// Ahead of the app's own CORS and body parsers on purpose. The SDK's handlers
+// bring their own — an open CORS policy, because an OAuth client may be any
+// origin, and the exact body parser each endpoint's content type requires. Let
+// the app's CORS run first and it would answer the preflight for /token with the
+// single browser origin this API otherwise allows, which is precisely the wrong
+// answer for a token endpoint.
+//
+// A failure to build it must not take the whole API down: the rest of the
+// product does not depend on it.
+try {
+  const { buildOAuthRouter } = require('./oauth');
+  app.use(buildOAuthRouter());
+} catch (err) {
+  logger.error('OAuth authorization server not mounted', { error: err.message });
+}
+
 app.use(
   cors({
     origin: config.corsOrigin,

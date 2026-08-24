@@ -7,9 +7,39 @@ Core Insight telecom KPI analytics platform in natural language.
 **It is read-only by construction.** It cannot upload files, start report processing,
 edit or delete anything, or write to disk. See [Read-only guarantee](#read-only-guarantee).
 
+There are two ways to connect, and they share one set of tool implementations:
+
+| | Hosted (recommended) | Local (stdio) |
+| --- | --- | --- |
+| How you connect | Add the remote MCP URL to your client; it opens a Core Insight login to approve access | Your client launches `src/mcp/index.js` on your machine |
+| Credentials | An OAuth token for your Core Insight account | A raw `DATABASE_URL` you paste into the client config |
+| Whose data you see | **Yours only** — every query is filtered to the signed-in account | Every account in the database |
+| Install | Nothing | This repository, Node, a reachable Postgres |
+| Code | `src/mcp-http/` | `src/mcp/index.js` |
+
 ---
 
-## Quick start
+## Hosted endpoint
+
+```
+POST https://bituinsight.vercel.app/api/mcp
+```
+
+Streamable HTTP, **stateless** — no `Mcp-Session-Id` is issued and each request stands
+alone, because Vercel keeps no memory between invocations and may route two requests of
+the same conversation to different instances. `GET` is answered `405` (there is no
+server-initiated SSE stream to open) and `DELETE` is a no-op `204`.
+
+The endpoint is mounted behind the OAuth bearer middleware, which verifies the token and
+exposes the platform user id at `req.auth.extra.userId`. `src/mcp-http/index.js` turns
+that id into the scope every tool query is bound to. A request that arrives without an
+identified account is refused with `401` — it is never served unscoped.
+
+See [Account scoping](#account-scoping).
+
+---
+
+## Quick start (local stdio)
 
 ```bash
 cd backend
@@ -114,21 +144,63 @@ Beyond the database: no tool writes files, uploads anything, calls the platform'
 API, or triggers the report-processing pipeline. The MCP process uses its own small
 connection pool (`src/mcp/db.js`), so it cannot affect the API server's connection budget.
 
-**Access scope:** the server connects with whatever `DATABASE_URL` you give it and reads
-across all accounts — it does not reproduce the application's per-user JWT scoping.
+**Never returned:** chart image bytes (`image_data`, up to ~100 KB of PNG per row —
+`image_bytes` gives the size instead) and password hashes.
 
-Rather than leave that as a silent property, the server **fails closed**: if the database
-holds more than one account it refuses to start, and prints the two ways forward.
+---
 
-- **Recommended** — point `DATABASE_URL` at a Postgres role restricted to the rows that
-  user may read, so the boundary is enforced by the database rather than by this process.
+## Account scoping
+
+Whose rows a statement may read is decided by a **scope**, built in `src/mcp/db.js` and
+handed to the tool assembly. Tools never reach the raw reader; they only have
+`scope.readRows` / `scope.readOne` (scoped) and `scope.catalogRows` / `scope.catalogOne`
+(account-neutral). The separation is enforced from both sides, so a leak takes more than
+one forgotten `WHERE`:
+
+- **A scoped statement must declare its anchor.** Every statement passed to the scoped
+  reader has to contain at least one `{{SCOPE:alias.user_id}}` (or `{{SCOPE:alias.id}}`
+  for the `users` row itself). The scope substitutes it for `alias.user_id = $n` and
+  appends the caller's id as a bound parameter. A statement with no anchor is **refused
+  before it reaches the database** — a tool that forgets the filter fails loudly instead
+  of returning somebody else's reports. The column half is a closed set, so an anchor can
+  only ever expand into an ownership test.
+- **An account-neutral statement must prove it.** The catalogue reader rejects any
+  statement naming `users`, `uploaded_files`, `processed_reports`, `workbook_uploads`,
+  `generated_metrics`, `generated_charts` or `teams_delivery_logs`.
+
+Tables with no `user_id` of their own — `generated_charts`, `generated_metrics` — inherit
+ownership from the report they hang off, so those statements join `processed_reports` and
+anchor there.
+
+**Unscoped by design.** Only two reads are account-neutral, both in `describe_schema`: the
+column list from `information_schema.columns` and the enum list from `pg_type`/`pg_enum`.
+They describe the shape of the database, not anybody's rows. Everything else is scoped —
+including `describe_schema`'s row counts, which report what the session can reach rather
+than what the platform holds, and the workflow catalogue's report counts, where the
+anchor sits in the `LEFT JOIN` so every workflow is still listed while only the caller's
+reports are counted. `list_users` anchors on the primary key, so an authenticated session
+sees its own account and no other.
+
+### The local stdio server
+
+Run over stdio there is no signed-in user — an MCP client launches the process with a
+`DATABASE_URL` and nothing else — so the tools read every account, exactly as they always
+have. That is a named choice, not an omission: `index.js` builds its scope through
+`createAllAccountsScope(ALL_ACCOUNTS_ACKNOWLEDGEMENT)`, which refuses to exist without the
+explicit acknowledgement string, and the anchor is still required on every statement — it
+just expands to a constant. `get_server_info` reports `scope.mode` so a connected model can
+tell the two apart.
+
+The existing fail-closed check still applies: if the database holds more than one account
+the stdio server **refuses to start**, and prints the ways forward.
+
+- **Recommended** — connect to the hosted endpoint instead. It identifies you and scopes
+  every tool to your account.
+- **Or** point `DATABASE_URL` at a Postgres role restricted to the rows that user may read.
 - **Or** set `MCP_ALLOW_ALL_USERS=true` when every MCP user is entitled to see every
   report anyway.
 
 On a single-account deployment there is nothing to separate and the server starts normally.
-
-**Never returned:** chart image bytes (`image_data`, up to ~100 KB of PNG per row —
-`image_bytes` gives the size instead) and password hashes.
 
 ---
 
@@ -405,10 +477,13 @@ The Chart.js definition behind one chart: type, dataset shape, axis labels, opti
 ## File layout
 
 ```
+src/mcp-http/
+  index.js            hosted Streamable HTTP handler (stateless, per-user scope)
+
 src/mcp/
   index.js            stdio entry point (npm run mcp)
-  server.js           McpServer assembly + get_server_info
-  db.js               read-only pool, statement guard, read-only transactions
+  server.js           McpServer assembly + get_server_info (shared by both transports)
+  db.js               read-only pool, statement guard, read-only transactions, scopes
   format.js           compact JSON results, truncation, not-found handling
   validate.js         shared zod input schemas and bounds
   tools/
@@ -432,3 +507,9 @@ src/mcp/
   `limit`, fewer `sections`).
 - **"read-only guard: …" in a response.** A statement was rejected before reaching the
   database. That is the guard doing its job; it never indicates a partially applied change.
+- **"scope guard: …" in a response.** A statement was refused because it did not declare
+  which column ties its rows to an account, or because an account-neutral read touched an
+  account-owned table. Both are bugs in a tool, not in the request — but they fail closed,
+  so no data crosses accounts while one is being fixed.
+- **`401` from the hosted endpoint.** The bearer token was missing, expired, or did not
+  carry a platform user id. The endpoint will not fall back to reading everything.

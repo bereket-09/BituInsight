@@ -8,7 +8,6 @@
  * do not have to know that split.
  */
 
-const { readRows, readOne } = require('../db');
 const { jsonResult, notFoundResult, truncateArray, compact, safeTool } = require('../format');
 const {
   z,
@@ -59,7 +58,7 @@ function trimFinding(finding, evidenceLimit) {
   return out;
 }
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'get_report_intelligence',
     {
@@ -82,7 +81,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const row = await readOne(
+      const row = await scope.readOne(
         `SELECT
            pr.id, pr.kpi_name, pr.status, pr.created_at,
            kw.slug AS workflow_slug, kw.name AS workflow_name,
@@ -104,7 +103,7 @@ function register(server) {
            pr.report_data->'intelligence'->'brief' AS brief
          FROM processed_reports pr
          JOIN kpi_workflows kw ON kw.id = pr.workflow_id
-         WHERE pr.id = $1`,
+         WHERE pr.id = $1 AND {{SCOPE:pr.user_id}}`,
         [args.report_id]
       );
 
@@ -224,7 +223,9 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const conditions = [];
+      // Anchored first: a cross-report search is exactly where a missing filter
+      // would be least visible, so the scope is not one of the optional conditions.
+      const conditions = ['{{SCOPE:pr.user_id}}'];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -245,7 +246,7 @@ function register(server) {
         push(`(COALESCE(f.value->>'title', '') ILIKE $? OR COALESCE(f.value->>'detail', '') ILIKE $?)`, `%${args.contains}%`);
       }
 
-      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const where = `WHERE ${conditions.join(' AND ')}`;
       // The CASE guard matters: jsonb_array_elements() raises on a non-array, and a
       // report processed before the analytics pass has no findings array at all.
       const from = `
@@ -258,12 +259,12 @@ function register(server) {
         ) AS f(value)
       `;
 
-      const totals = await readOne(`SELECT COUNT(*)::int AS total ${from} ${where}`, values);
+      const totals = await scope.readOne(`SELECT COUNT(*)::int AS total ${from} ${where}`, values);
 
       const limit = args.limit ?? 40;
       const offset = args.offset ?? 0;
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT
            pr.id AS report_id,
            pr.kpi_name,
@@ -319,7 +320,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const conditions = [`pr.summary->'intelligence' ? 'dataQuality'`];
+      const conditions = ['{{SCOPE:pr.user_id}}', `pr.summary->'intelligence' ? 'dataQuality'`];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -332,7 +333,7 @@ function register(server) {
       const where = `WHERE ${conditions.join(' AND ')}`;
       const from = `FROM processed_reports pr JOIN kpi_workflows kw ON kw.id = pr.workflow_id`;
 
-      const distribution = await readRows(
+      const distribution = await scope.readRows(
         `SELECT pr.summary->'intelligence'->'dataQuality'->>'grade' AS grade,
                 COUNT(*)::int AS reports,
                 ROUND(AVG((pr.summary->'intelligence'->'dataQuality'->>'score')::numeric), 1) AS avg_score
@@ -341,7 +342,7 @@ function register(server) {
         values
       );
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT pr.id AS report_id, pr.kpi_name, kw.slug AS workflow_slug, pr.created_at,
                 pr.summary->'intelligence'->'dataQuality'->>'grade' AS grade,
                 (pr.summary->'intelligence'->'dataQuality'->>'score')::numeric AS score,

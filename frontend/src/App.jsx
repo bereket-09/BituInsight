@@ -11,6 +11,7 @@ import HistoricalReports from './pages/HistoricalReports';
 import AggregateView from './pages/AggregateView';
 import WorkflowExplorer from './pages/WorkflowExplorer';
 import Settings from './pages/Settings';
+import OAuthAuthorize from './pages/OAuthAuthorize';
 import LoadingSpinner from './components/LoadingSpinner';
 
 function PrivateRoute({ children }) {
@@ -23,6 +24,13 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/*
+        Outside PrivateRoute deliberately. An assistant sends the person straight
+        here from its own app, so they may well arrive with no session; the page
+        signs them in itself rather than bouncing to /login and losing the
+        request the assistant is waiting on.
+      */}
+      <Route path="/oauth/authorize" element={<OAuthAuthorize />} />
       <Route
         path="/"
         element={

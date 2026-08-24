@@ -1,4 +1,5 @@
-import client from './client';
+import axios from 'axios';
+import client, { API_URL } from './client';
 
 export const authApi = {
   login: (email, password) => client.post('/auth/login', { email, password }),
@@ -104,4 +105,31 @@ export const workbookApi = {
 // The read-only MCP server's tool catalogue and access posture, for Settings.
 export const mcpApi = {
   connection: () => client.get('/mcp/connection'),
+};
+
+/*
+ * OAuth consent, on its own axios instance.
+ *
+ * The shared client bounces every 401 to /login, which is exactly wrong here:
+ * the consent page IS the sign-in surface for this flow, and a redirect would
+ * throw away the request_id the assistant is waiting on. This instance carries
+ * the session token when there is one and reports failures to the page instead.
+ */
+const oauthClient = axios.create({
+  baseURL: API_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+oauthClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('coreinsight_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export const oauthApi = {
+  consent: (requestId) => oauthClient.get(`/oauth/consent/${requestId}`),
+  approve: (requestId) => oauthClient.post(`/oauth/consent/${requestId}/approve`),
+  deny: (requestId) => oauthClient.post(`/oauth/consent/${requestId}/deny`),
 };

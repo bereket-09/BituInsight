@@ -9,7 +9,6 @@
  * lowest-common-denominator subset, with a few common fields lifted out for sorting.
  */
 
-const { readRows, readOne } = require('../db');
 const { jsonResult, notFoundResult, truncateArray, compact, safeTool } = require('../format');
 const { z, uuid, text, boundedInt, isoDate, WORKFLOW_SLUGS } = require('../validate');
 
@@ -32,7 +31,7 @@ const PEAK_SQL = `COALESCE(
   (pr.report_data->'calculated'->'metrics'->>'maximum')::numeric
 )`;
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'list_kpis',
     {
@@ -50,7 +49,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const conditions = ['pr.kpi_name IS NOT NULL'];
+      const conditions = ['{{SCOPE:pr.user_id}}', 'pr.kpi_name IS NOT NULL'];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -62,7 +61,7 @@ function register(server) {
 
       values.push(args.limit ?? 100);
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT pr.kpi_name,
                 COUNT(*)::int AS report_count,
                 COUNT(*) FILTER (WHERE pr.status = 'completed')::int AS completed_count,
@@ -110,7 +109,7 @@ function register(server) {
     },
     safeTool(async (args) => {
       const values = [args.exact ? args.kpi_name : `%${args.kpi_name}%`];
-      const conditions = ['pr.kpi_name ILIKE $1'];
+      const conditions = ['{{SCOPE:pr.user_id}}', 'pr.kpi_name ILIKE $1'];
       if (args.workflow) {
         values.push(args.workflow);
         conditions.push(`kw.slug = $${values.length}`);
@@ -121,7 +120,7 @@ function register(server) {
       }
       values.push(args.limit ?? 25);
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT pr.id AS report_id, pr.kpi_name, pr.status, pr.created_at, pr.completed_at,
                 pr.workbook_id, kw.slug AS workflow_slug,
                 pr.report_data->'calculated'->'metrics' AS metrics,
@@ -184,7 +183,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT pr.id AS report_id, pr.kpi_name, pr.status, pr.created_at,
                 kw.slug AS workflow_slug,
                 uf.original_filename,
@@ -199,7 +198,7 @@ function register(server) {
          FROM processed_reports pr
          JOIN kpi_workflows kw ON kw.id = pr.workflow_id
          LEFT JOIN uploaded_files uf ON uf.id = pr.uploaded_file_id
-         WHERE pr.id = ANY($1::uuid[])`,
+         WHERE pr.id = ANY($1::uuid[]) AND {{SCOPE:pr.user_id}}`,
         [args.report_ids]
       );
 
@@ -207,7 +206,11 @@ function register(server) {
       const missing = args.report_ids.filter((id) => !foundIds.has(id));
 
       if (rows.length === 0) {
-        return notFoundResult('report', args.report_ids, 'None of the supplied ids exist.');
+        return notFoundResult(
+          'report',
+          args.report_ids,
+          'None of the supplied ids exist in this account.'
+        );
       }
 
       const metricKeys = new Set();
@@ -312,7 +315,7 @@ function register(server) {
       };
       const groupExpr = GROUP_SQL[args.group_by];
 
-      const conditions = [];
+      const conditions = ['{{SCOPE:pr.user_id}}'];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -324,10 +327,10 @@ function register(server) {
       if (args.created_from) push('pr.created_at >= $?', args.created_from);
       if (args.created_to) push('pr.created_at <= $?', args.created_to);
 
-      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const where = `WHERE ${conditions.join(' AND ')}`;
       values.push(args.limit ?? 50);
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT ${groupExpr} AS group_key,
                 COUNT(*)::int AS reports,
                 COUNT(DISTINCT pr.kpi_name)::int AS distinct_kpis,

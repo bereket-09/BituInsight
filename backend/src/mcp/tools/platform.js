@@ -7,7 +7,7 @@
  * data lives and which no catalog can describe on its own.
  */
 
-const { readRows, readOne, BLOCKED_COLUMNS } = require('../db');
+const { BLOCKED_COLUMNS } = require('../db');
 const { jsonResult, compact, safeTool } = require('../format');
 const { z, boundedInt } = require('../validate');
 
@@ -99,15 +99,15 @@ const JSONB_GUIDE = {
   },
 };
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'get_platform_stats',
     {
       title: 'Platform statistics',
       description:
-        'Overall state of the platform: report and workbook counts by status, per-workflow ' +
-        'usage, chart storage, KPI coverage, activity over the last 30 days and the most ' +
-        'recent uploads.',
+        'The state of your account on this platform: your report and workbook counts by ' +
+        'status, per-workflow usage, chart storage, KPI coverage, activity over the last ' +
+        '30 days and your most recent uploads. Counts cover your own data only.',
       inputSchema: {
         recent_limit: boundedInt(1, 50, 10).describe('How many recent reports / workbooks to list'),
         activity_days: boundedInt(1, 365, 30).describe('Window for the daily activity histogram'),
@@ -118,83 +118,103 @@ function register(server) {
       const recentLimit = args.recent_limit ?? 10;
       const activityDays = args.activity_days ?? 30;
 
-      const reportStats = await readOne(
+      const reportStats = await scope.readOne(
         `SELECT COUNT(*)::int AS total,
-                COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-                COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-                COUNT(*) FILTER (WHERE status IN ('pending','validating','processing'))::int AS in_progress,
-                COUNT(*) FILTER (WHERE workbook_id IS NOT NULL)::int AS from_workbooks,
-                COUNT(DISTINCT kpi_name)::int AS distinct_kpis,
-                MIN(created_at) AS first_report_at,
-                MAX(created_at) AS last_report_at
-         FROM processed_reports`
+                COUNT(*) FILTER (WHERE pr.status = 'completed')::int AS completed,
+                COUNT(*) FILTER (WHERE pr.status = 'failed')::int AS failed,
+                COUNT(*) FILTER (WHERE pr.status IN ('pending','validating','processing'))::int AS in_progress,
+                COUNT(*) FILTER (WHERE pr.workbook_id IS NOT NULL)::int AS from_workbooks,
+                COUNT(DISTINCT pr.kpi_name)::int AS distinct_kpis,
+                MIN(pr.created_at) AS first_report_at,
+                MAX(pr.created_at) AS last_report_at
+         FROM processed_reports pr
+         WHERE {{SCOPE:pr.user_id}}`
       );
 
-      const workbookStats = await readOne(
+      const workbookStats = await scope.readOne(
         `SELECT COUNT(*)::int AS total,
-                COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
-                COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-                COALESCE(SUM(sheet_count), 0)::int AS total_sheets,
-                COALESCE(SUM(kpi_count), 0)::int AS total_kpis,
-                COALESCE(SUM(file_size), 0)::bigint AS total_source_bytes
-         FROM workbook_uploads`
+                COUNT(*) FILTER (WHERE wu.status = 'completed')::int AS completed,
+                COUNT(*) FILTER (WHERE wu.status = 'failed')::int AS failed,
+                COALESCE(SUM(wu.sheet_count), 0)::int AS total_sheets,
+                COALESCE(SUM(wu.kpi_count), 0)::int AS total_kpis,
+                COALESCE(SUM(wu.file_size), 0)::bigint AS total_source_bytes
+         FROM workbook_uploads wu
+         WHERE {{SCOPE:wu.user_id}}`
       );
 
-      const storage = await readOne(
-        `SELECT (SELECT COUNT(*)::int FROM generated_charts) AS charts,
-                (SELECT COALESCE(SUM(image_bytes), 0)::bigint FROM generated_charts) AS chart_image_bytes,
-                (SELECT COUNT(*)::int FROM generated_charts WHERE image_bytes IS NULL) AS charts_without_image,
-                (SELECT COUNT(*)::int FROM generated_metrics) AS metric_rows,
-                (SELECT COUNT(*)::int FROM uploaded_files) AS uploaded_files,
-                (SELECT COALESCE(SUM(file_size), 0)::bigint FROM uploaded_files) AS uploaded_bytes,
-                (SELECT COUNT(*)::int FROM users) AS users,
-                (SELECT COUNT(*)::int FROM teams_delivery_logs) AS teams_deliveries`
+      // Charts and metric rows carry no user_id, so each subquery joins the report
+      // they belong to and anchors there. "users" counts the caller's own row, which
+      // is 1 on the hosted transport and the whole table on the local stdio server.
+      const storage = await scope.readOne(
+        `SELECT (SELECT COUNT(*)::int
+                   FROM generated_charts gc JOIN processed_reports pr ON pr.id = gc.report_id
+                   WHERE {{SCOPE:pr.user_id}}) AS charts,
+                (SELECT COALESCE(SUM(gc.image_bytes), 0)::bigint
+                   FROM generated_charts gc JOIN processed_reports pr ON pr.id = gc.report_id
+                   WHERE {{SCOPE:pr.user_id}}) AS chart_image_bytes,
+                (SELECT COUNT(*)::int
+                   FROM generated_charts gc JOIN processed_reports pr ON pr.id = gc.report_id
+                   WHERE gc.image_bytes IS NULL AND {{SCOPE:pr.user_id}}) AS charts_without_image,
+                (SELECT COUNT(*)::int
+                   FROM generated_metrics gm JOIN processed_reports pr ON pr.id = gm.report_id
+                   WHERE {{SCOPE:pr.user_id}}) AS metric_rows,
+                (SELECT COUNT(*)::int FROM uploaded_files uf WHERE {{SCOPE:uf.user_id}}) AS uploaded_files,
+                (SELECT COALESCE(SUM(uf.file_size), 0)::bigint
+                   FROM uploaded_files uf WHERE {{SCOPE:uf.user_id}}) AS uploaded_bytes,
+                (SELECT COUNT(*)::int FROM users u WHERE {{SCOPE:u.id}}) AS users,
+                (SELECT COUNT(*)::int
+                   FROM teams_delivery_logs tdl WHERE {{SCOPE:tdl.user_id}}) AS teams_deliveries`
       );
 
-      const byWorkflow = await readRows(
+      const byWorkflow = await scope.readRows(
         `SELECT kw.slug, kw.name,
                 COUNT(pr.id)::int AS reports,
                 COUNT(pr.id) FILTER (WHERE pr.status = 'completed')::int AS completed,
                 MAX(pr.created_at) AS last_report_at
          FROM kpi_workflows kw
-         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id
+         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id AND {{SCOPE:pr.user_id}}
          GROUP BY kw.id ORDER BY reports DESC`
       );
 
-      const activity = await readRows(
-        `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+      const activity = await scope.readRows(
+        `SELECT to_char(date_trunc('day', pr.created_at), 'YYYY-MM-DD') AS day,
                 COUNT(*)::int AS reports,
-                COUNT(*) FILTER (WHERE status = 'completed')::int AS completed
-         FROM processed_reports
-         WHERE created_at >= NOW() - ($1 || ' days')::interval
+                COUNT(*) FILTER (WHERE pr.status = 'completed')::int AS completed
+         FROM processed_reports pr
+         WHERE pr.created_at >= NOW() - ($1 || ' days')::interval AND {{SCOPE:pr.user_id}}
          GROUP BY 1 ORDER BY 1 DESC`,
         [String(activityDays)]
       );
 
-      const recentReports = await readRows(
+      const recentReports = await scope.readRows(
         `SELECT pr.id, pr.kpi_name, pr.status, pr.created_at, kw.slug AS workflow_slug,
                 uf.original_filename
          FROM processed_reports pr
          JOIN kpi_workflows kw ON kw.id = pr.workflow_id
          LEFT JOIN uploaded_files uf ON uf.id = pr.uploaded_file_id
+         WHERE {{SCOPE:pr.user_id}}
          ORDER BY pr.created_at DESC LIMIT $1`,
         [recentLimit]
       );
 
-      const recentWorkbooks = await readRows(
-        `SELECT id, original_filename, status, sheet_count, kpi_count, created_at
-         FROM workbook_uploads ORDER BY created_at DESC LIMIT $1`,
+      const recentWorkbooks = await scope.readRows(
+        `SELECT wu.id, wu.original_filename, wu.status, wu.sheet_count, wu.kpi_count, wu.created_at
+         FROM workbook_uploads wu
+         WHERE {{SCOPE:wu.user_id}}
+         ORDER BY wu.created_at DESC LIMIT $1`,
         [recentLimit]
       );
 
-      const qualitySpread = await readRows(
-        `SELECT COALESCE(summary->'intelligence'->'dataQuality'->>'grade', 'none') AS grade,
+      const qualitySpread = await scope.readRows(
+        `SELECT COALESCE(pr.summary->'intelligence'->'dataQuality'->>'grade', 'none') AS grade,
                 COUNT(*)::int AS reports
-         FROM processed_reports WHERE status = 'completed'
+         FROM processed_reports pr
+         WHERE pr.status = 'completed' AND {{SCOPE:pr.user_id}}
          GROUP BY 1 ORDER BY 2 DESC`
       );
 
       return jsonResult({
+        scope: scope.describe(),
         reports: compact(reportStats || {}),
         workbooks: compact(workbookStats || {}),
         storage: compact(storage || {}),
@@ -212,15 +232,19 @@ function register(server) {
     {
       title: 'List platform users',
       description:
-        'Platform accounts with their report and workbook counts. Credentials are never ' +
-        'returned — password_hash is blocked at the query guard.',
+        'Accounts visible to this session with their report and workbook counts. Over an ' +
+        'authenticated connection that is the signed-in account and no other. Credentials ' +
+        'are never returned — password_hash is blocked at the query guard.',
       inputSchema: {
         limit: boundedInt(1, 100, 25),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const rows = await readRows(
+      // A users row *is* an account, so the anchor here is on the primary key: the
+      // caller sees themselves. The local stdio server, which has no authenticated
+      // caller, still lists every account as it always did.
+      const rows = await scope.readRows(
         `SELECT u.id, u.email, u.full_name, u.created_at,
                 COUNT(DISTINCT pr.id)::int AS report_count,
                 COUNT(DISTINCT wu.id)::int AS workbook_count,
@@ -228,6 +252,7 @@ function register(server) {
          FROM users u
          LEFT JOIN processed_reports pr ON pr.user_id = u.id
          LEFT JOIN workbook_uploads wu ON wu.user_id = u.id
+         WHERE {{SCOPE:u.id}}
          GROUP BY u.id
          ORDER BY u.created_at
          LIMIT $1`,
@@ -236,6 +261,7 @@ function register(server) {
 
       return jsonResult({
         count: rows.length,
+        scope: scope.describe(),
         note: 'password_hash is unreadable through this server by design.',
         users: rows.map((u) => compact(u)),
       });
@@ -247,9 +273,10 @@ function register(server) {
     {
       title: 'Describe the queryable schema',
       description:
-        'Discovery tool: every table this server reads, its columns and types, row counts, ' +
-        'enum values, and a map of the JSONB documents (where findings, time series and ' +
-        'chart configs actually live) with the tool that reads each one.',
+        'Discovery tool: every table this server reads, its columns and types, enum ' +
+        'values, and a map of the JSONB documents (where findings, time series and chart ' +
+        'configs actually live) with the tool that reads each one. Row counts are scoped ' +
+        'to what this session can reach, not the whole platform.',
       inputSchema: {
         table: z
           .enum(KNOWN_TABLES)
@@ -266,7 +293,10 @@ function register(server) {
     safeTool(async (args) => {
       const tables = args.table ? [args.table] : KNOWN_TABLES;
 
-      const columns = await readRows(
+      // information_schema and pg_catalog describe the shape of the database, not
+      // anybody's rows, so they go through the catalogue reader — which refuses any
+      // statement that names an account-owned table.
+      const columns = await scope.catalogRows(
         `SELECT table_name, column_name, data_type, is_nullable, column_default, udt_name
          FROM information_schema.columns
          WHERE table_schema = 'public' AND table_name = ANY($1::text[])
@@ -292,7 +322,7 @@ function register(server) {
         );
       }
 
-      const enums = await readRows(
+      const enums = await scope.catalogRows(
         // enumlabel is of type "name"; casting to text lets node-postgres decode the
         // array into a real JS array instead of the raw "{a,b,c}" literal.
         `SELECT t.typname AS enum_name, ARRAY_AGG(e.enumlabel::text ORDER BY e.enumsortorder) AS values
@@ -306,15 +336,23 @@ function register(server) {
       // Fixed subqueries, one per known table, so counts need no dynamic SQL.
       let counts = null;
       if (args.include_counts !== false) {
-        counts = await readOne(
-          `SELECT (SELECT COUNT(*)::int FROM users) AS users,
+        // Row counts are data, not shape, so these are scoped: they say how much of
+        // each table this session can actually reach. kpi_workflows is the platform's
+        // workflow catalogue and is the same for everyone.
+        counts = await scope.readOne(
+          `SELECT (SELECT COUNT(*)::int FROM users u WHERE {{SCOPE:u.id}}) AS users,
                   (SELECT COUNT(*)::int FROM kpi_workflows) AS kpi_workflows,
-                  (SELECT COUNT(*)::int FROM uploaded_files) AS uploaded_files,
-                  (SELECT COUNT(*)::int FROM processed_reports) AS processed_reports,
-                  (SELECT COUNT(*)::int FROM workbook_uploads) AS workbook_uploads,
-                  (SELECT COUNT(*)::int FROM generated_metrics) AS generated_metrics,
-                  (SELECT COUNT(*)::int FROM generated_charts) AS generated_charts,
-                  (SELECT COUNT(*)::int FROM teams_delivery_logs) AS teams_delivery_logs`
+                  (SELECT COUNT(*)::int FROM uploaded_files uf WHERE {{SCOPE:uf.user_id}}) AS uploaded_files,
+                  (SELECT COUNT(*)::int FROM processed_reports pr WHERE {{SCOPE:pr.user_id}}) AS processed_reports,
+                  (SELECT COUNT(*)::int FROM workbook_uploads wu WHERE {{SCOPE:wu.user_id}}) AS workbook_uploads,
+                  (SELECT COUNT(*)::int
+                     FROM generated_metrics gm JOIN processed_reports pr ON pr.id = gm.report_id
+                     WHERE {{SCOPE:pr.user_id}}) AS generated_metrics,
+                  (SELECT COUNT(*)::int
+                     FROM generated_charts gc JOIN processed_reports pr ON pr.id = gc.report_id
+                     WHERE {{SCOPE:pr.user_id}}) AS generated_charts,
+                  (SELECT COUNT(*)::int
+                     FROM teams_delivery_logs tdl WHERE {{SCOPE:tdl.user_id}}) AS teams_delivery_logs`
         );
       }
 
@@ -329,6 +367,9 @@ function register(server) {
 
       return jsonResult({
         access: 'read-only',
+        scope: scope.describe(),
+        rowCountNote:
+          'Row counts are what this session can reach, not what the whole platform holds.',
         tables: Object.entries(grouped).map(([name, cols]) =>
           compact({
             name,

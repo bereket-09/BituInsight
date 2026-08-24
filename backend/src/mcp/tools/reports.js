@@ -7,7 +7,6 @@
  * documents, so a report lookup costs kilobytes instead of megabytes.
  */
 
-const { readRows, readOne } = require('../db');
 const {
   jsonResult,
   notFoundResult,
@@ -71,7 +70,9 @@ const LIST_JOINS = `
  * Every value becomes a bound parameter; only fixed fragments are concatenated.
  */
 function buildReportFilters(args) {
-  const conditions = [];
+  // The ownership anchor is the first condition, not an optional one, so every
+  // statement built here is scoped whatever the caller asked for.
+  const conditions = ['{{SCOPE:pr.user_id}}'];
   const values = [];
   const applied = {};
 
@@ -124,13 +125,13 @@ function buildReportFilters(args) {
   }
 
   return {
-    where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+    where: `WHERE ${conditions.join(' AND ')}`,
     values,
     applied,
   };
 }
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'list_reports',
     {
@@ -166,12 +167,12 @@ function register(server) {
       const page = args.page ?? 1;
       const offset = (page - 1) * limit;
 
-      const countRow = await readOne(
+      const countRow = await scope.readOne(
         `SELECT COUNT(*)::int AS total ${LIST_JOINS} ${where}`,
         values
       );
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT ${LIST_COLUMNS} ${LIST_JOINS} ${where}
          ORDER BY ${SORT_SQL[args.sort || 'created_desc']}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -232,7 +233,7 @@ function register(server) {
 
       // `summary - 'intelligence'` strips the analytics block at the database, so the
       // formatted-summary section never carries the (much larger) analysis payload.
-      const report = await readOne(
+      const report = await scope.readOne(
         `SELECT
            pr.id, pr.status, pr.kpi_name, pr.sheet_name, pr.workbook_id,
            pr.created_at, pr.completed_at, pr.updated_at, pr.error_message,
@@ -259,7 +260,7 @@ function register(server) {
          LEFT JOIN uploaded_files uf ON uf.id = pr.uploaded_file_id
          LEFT JOIN users u ON u.id = pr.user_id
          LEFT JOIN workbook_uploads wb ON wb.id = pr.workbook_id
-         WHERE pr.id = $1`,
+         WHERE pr.id = $1 AND {{SCOPE:pr.user_id}}`,
         [args.report_id]
       );
 
@@ -303,9 +304,15 @@ function register(server) {
       }
 
       if (wanted.has('metrics')) {
-        const metricRows = await readRows(
-          `SELECT metric_key, metric_value, metric_label, metric_type, unit, metadata
-           FROM generated_metrics WHERE report_id = $1 ORDER BY metric_key`,
+        // generated_metrics carries no user_id of its own; ownership comes from the
+        // report it hangs off, so the join to processed_reports is what makes the
+        // anchor available and is not optional.
+        const metricRows = await scope.readRows(
+          `SELECT gm.metric_key, gm.metric_value, gm.metric_label, gm.metric_type, gm.unit, gm.metadata
+           FROM generated_metrics gm
+           JOIN processed_reports pr ON pr.id = gm.report_id
+           WHERE gm.report_id = $1 AND {{SCOPE:pr.user_id}}
+           ORDER BY gm.metric_key`,
           [args.report_id]
         );
         payload.metrics = {
@@ -321,11 +328,14 @@ function register(server) {
       if (wanted.has('charts')) {
         // image_data is deliberately absent: it holds up to ~100 KB of PNG per row
         // and is blocked at the query guard. image_bytes carries the size instead.
-        const charts = await readRows(
-          `SELECT id, chart_type, title, file_path, image_bytes, created_at,
-                  config->>'id' AS config_id,
-                  config->>'type' AS config_type
-           FROM generated_charts WHERE report_id = $1 ORDER BY created_at`,
+        const charts = await scope.readRows(
+          `SELECT gc.id, gc.chart_type, gc.title, gc.file_path, gc.image_bytes, gc.created_at,
+                  gc.config->>'id' AS config_id,
+                  gc.config->>'type' AS config_type
+           FROM generated_charts gc
+           JOIN processed_reports pr ON pr.id = gc.report_id
+           WHERE gc.report_id = $1 AND {{SCOPE:pr.user_id}}
+           ORDER BY gc.created_at`,
           [args.report_id]
         );
         payload.charts = {
@@ -373,7 +383,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const row = await readOne(
+      const row = await scope.readOne(
         `SELECT pr.id, pr.kpi_name, pr.status, kw.slug AS workflow_slug,
                 pr.report_data->'calculated'->'metrics' AS calculated_metrics,
                 pr.report_data->'calculated'->'threshold' AS threshold,
@@ -384,15 +394,18 @@ function register(server) {
                 pr.summary->'highlights' AS highlights
          FROM processed_reports pr
          JOIN kpi_workflows kw ON kw.id = pr.workflow_id
-         WHERE pr.id = $1`,
+         WHERE pr.id = $1 AND {{SCOPE:pr.user_id}}`,
         [args.report_id]
       );
 
       if (!row) return notFoundResult('report', args.report_id);
 
-      const metricRows = await readRows(
-        `SELECT metric_key, metric_value, metric_label, metric_type, unit
-         FROM generated_metrics WHERE report_id = $1 ORDER BY metric_key`,
+      const metricRows = await scope.readRows(
+        `SELECT gm.metric_key, gm.metric_value, gm.metric_label, gm.metric_type, gm.unit
+         FROM generated_metrics gm
+         JOIN processed_reports pr ON pr.id = gm.report_id
+         WHERE gm.report_id = $1 AND {{SCOPE:pr.user_id}}
+         ORDER BY gm.metric_key`,
         [args.report_id]
       );
 

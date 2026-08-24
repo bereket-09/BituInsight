@@ -8,13 +8,12 @@
  * rather than by loading the document into Node and cutting it there.
  */
 
-const { readRows, readOne } = require('../db');
 const { jsonResult, notFoundResult, compact, safeTool } = require('../format');
 const { z, uuid, boundedInt, text } = require('../validate');
 
 const MAX_POINTS_PER_CALL = 500;
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'get_report_timeseries',
     {
@@ -44,7 +43,7 @@ function register(server) {
     safeTool(async (args) => {
       // Step 1: series metadata and the size of every available span. Cheap, and it
       // tells the caller what to page through without transferring any points.
-      const meta = await readOne(
+      const meta = await scope.readOne(
         `SELECT
            pr.kpi_name,
            pr.status,
@@ -63,7 +62,7 @@ function register(server) {
          CROSS JOIN LATERAL (
            SELECT COALESCE(pr.report_data->'tables'->'timeSeries', '{}'::jsonb) AS doc
          ) ts
-         WHERE pr.id = $1`,
+         WHERE pr.id = $1 AND {{SCOPE:pr.user_id}}`,
         [args.report_id]
       );
 
@@ -111,13 +110,13 @@ function register(server) {
 
       // Step 2: slice the requested window server-side. WITH ORDINALITY preserves the
       // stored order, which is chronological.
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT COALESCE(jsonb_agg(elem ORDER BY ord), '[]'::jsonb) AS points
          FROM processed_reports pr
          CROSS JOIN LATERAL jsonb_array_elements(
            COALESCE(pr.report_data->'tables'->'timeSeries'->'series'->$2, '[]'::jsonb)
          ) WITH ORDINALITY AS s(elem, ord)
-         WHERE pr.id = $1 AND s.ord > $3 AND s.ord <= $3 + $4`,
+         WHERE pr.id = $1 AND {{SCOPE:pr.user_id}} AND s.ord > $3 AND s.ord <= $3 + $4`,
         [args.report_id, span, offset, limit]
       );
 

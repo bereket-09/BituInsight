@@ -12,7 +12,6 @@
  */
 
 const registry = require('../../kpi-workflows/registry');
-const { readRows, readOne } = require('../db');
 const { jsonResult, notFoundResult, compact, safeTool } = require('../format');
 const { z, WORKFLOW_SLUGS } = require('../validate');
 
@@ -31,7 +30,7 @@ function describeChartDefinition(def) {
   });
 }
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'list_workflows',
     {
@@ -45,14 +44,17 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const dbRows = await readRows(
+      // The workflow catalogue itself is platform-wide, but the counts hanging off
+      // it are not: the anchor sits in the LEFT JOIN so every workflow is still
+      // listed while only the caller's reports are counted.
+      const dbRows = await scope.readRows(
         `SELECT kw.id, kw.slug, kw.name, kw.description, kw.version, kw.metadata,
                 kw.is_active, kw.created_at,
                 COUNT(pr.id)::int AS report_count,
                 COUNT(pr.id) FILTER (WHERE pr.status = 'completed')::int AS completed_count,
                 MAX(pr.created_at) AS last_report_at
          FROM kpi_workflows kw
-         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id
+         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id AND {{SCOPE:pr.user_id}}
          GROUP BY kw.id
          ORDER BY kw.slug`
       );
@@ -116,7 +118,7 @@ function register(server) {
         return notFoundResult('workflow', args.slug, `Known slugs: ${WORKFLOW_SLUGS.join(', ')}`);
       }
 
-      const row = await readOne(
+      const row = await scope.readOne(
         `SELECT kw.id, kw.slug, kw.name, kw.description, kw.version, kw.metadata,
                 kw.is_active, kw.created_at, kw.updated_at,
                 COUNT(pr.id)::int AS report_count,
@@ -125,17 +127,18 @@ function register(server) {
                 MIN(pr.created_at) AS first_report_at,
                 MAX(pr.created_at) AS last_report_at
          FROM kpi_workflows kw
-         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id
+         LEFT JOIN processed_reports pr ON pr.workflow_id = kw.id AND {{SCOPE:pr.user_id}}
          WHERE kw.slug = $1
          GROUP BY kw.id`,
         [args.slug]
       );
 
       const recent = row
-        ? await readRows(
-            `SELECT id, kpi_name, status, created_at
-             FROM processed_reports WHERE workflow_id = $1
-             ORDER BY created_at DESC LIMIT 5`,
+        ? await scope.readRows(
+            `SELECT pr.id, pr.kpi_name, pr.status, pr.created_at
+             FROM processed_reports pr
+             WHERE pr.workflow_id = $1 AND {{SCOPE:pr.user_id}}
+             ORDER BY pr.created_at DESC LIMIT 5`,
             [row.id]
           )
         : [];

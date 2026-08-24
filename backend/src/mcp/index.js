@@ -16,21 +16,35 @@ const config = require('../config');
 const { createServer, SERVER_NAME, SERVER_VERSION } = require('./server');
 const db = require('./db');
 
+/**
+ * The local server has no authenticated caller — an MCP client launches it over a
+ * pipe with a DATABASE_URL and nothing else — so there is no user id to scope to
+ * and the tools behave exactly as they always have: they read the whole database.
+ *
+ * That is a deliberate, named choice rather than an omission. The scope is built
+ * through `createAllAccountsScope`, which refuses to exist without an explicit
+ * acknowledgement, and it is only reached after `assertSingleTenant()` below has
+ * confirmed there is nothing to separate. The hosted transport (src/mcp-http)
+ * never constructs this scope; it always builds a per-user one.
+ */
+const LOCAL_SCOPE = () => db.createAllAccountsScope(db.ALL_ACCOUNTS_ACKNOWLEDGEMENT);
+
 function log(message) {
   process.stderr.write(`[${SERVER_NAME}-mcp] ${message}\n`);
 }
 
 /**
- * The tools here read the whole database; they do not reproduce the application's
- * per-user scoping, and retrofitting a filter into every query is the kind of
- * change where missing one query leaks silently.
+ * Run over stdio there is no signed-in user, so the tools read every account's
+ * rows. The scoping that the hosted transport applies has no input here.
  *
  * So this fails closed instead: on a single-account deployment there is nothing to
  * separate and the server starts normally, but the moment a second account exists
  * it refuses to run until the operator makes an explicit choice. A deliberate
- * decision beats a silent cross-account read.
+ * decision beats a silent cross-account read. Anyone who wants per-account
+ * separation should connect to the hosted endpoint instead, where the bearer token
+ * identifies the caller and every query is filtered to them.
  */
-async function assertSingleTenant() {
+async function assertSingleTenant(scope) {
   if (process.env.MCP_ALLOW_ALL_USERS === 'true') {
     log('MCP_ALLOW_ALL_USERS=true — serving data across every account');
     return;
@@ -38,7 +52,9 @@ async function assertSingleTenant() {
 
   let count;
   try {
-    const row = await db.readOne('SELECT COUNT(*)::int AS n FROM users');
+    // The anchor is required even here; under the all-accounts scope it expands to
+    // a constant, which is exactly the thing this check is measuring the risk of.
+    const row = await scope.readOne('SELECT COUNT(*)::int AS n FROM users u WHERE {{SCOPE:u.id}}');
     count = row ? row.n : 0;
   } catch (err) {
     log(`could not verify account count: ${err.message}`);
@@ -50,9 +66,11 @@ async function assertSingleTenant() {
     log(`Refusing to start: this database holds ${count} accounts.`);
     log('These tools read across all of them, so starting now would expose one');
     log("account's reports to another. Choose one of:");
-    log('  1. Point DATABASE_URL at a Postgres role restricted to the rows this');
-    log('     user may read (recommended).');
-    log('  2. Set MCP_ALLOW_ALL_USERS=true if every MCP user is entitled to see');
+    log('  1. Connect to the hosted endpoint instead (Settings → AI assistant');
+    log('     access). It signs you in and scopes every tool to your account.');
+    log('  2. Point DATABASE_URL at a Postgres role restricted to the rows this');
+    log('     user may read.');
+    log('  3. Set MCP_ALLOW_ALL_USERS=true if every MCP user is entitled to see');
     log('     all reports.');
     log('');
     process.exit(1);
@@ -65,9 +83,10 @@ async function main() {
     process.exit(1);
   }
 
-  await assertSingleTenant();
+  const scope = LOCAL_SCOPE();
+  await assertSingleTenant(scope);
 
-  const server = createServer();
+  const server = createServer(scope);
   const transport = new StdioServerTransport();
 
   let shuttingDown = false;
@@ -94,7 +113,7 @@ async function main() {
   process.stdin.on('close', () => shutdown('stdin closed'));
 
   await server.connect(transport);
-  log(`v${SERVER_VERSION} ready on stdio (read-only)`);
+  log(`v${SERVER_VERSION} ready on stdio (read-only, all accounts)`);
 }
 
 main().catch((err) => {

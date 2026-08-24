@@ -6,6 +6,9 @@ const reportController = require('../controllers/report.controller');
 const aggregationController = require('../controllers/aggregation.controller');
 const workbookController = require('../controllers/workbook.controller');
 const mcpController = require('../controllers/mcp.controller');
+const oauthConsentController = require('../controllers/oauthConsent.controller');
+const { handleMcpRequest } = require('../mcp-http');
+const { requireMcpAuth } = require('../oauth');
 const { authenticate } = require('../middleware/auth.middleware');
 const { upload } = require('../middleware/upload.middleware');
 
@@ -50,6 +53,27 @@ router.delete(
 // section in Settings. Reports no live client: an MCP client runs the server
 // itself, on the user's machine, over stdio.
 router.get('/mcp/connection', authenticate, mcpController.getConnectionInfo);
+
+// The hosted MCP endpoint. Declared after /mcp/connection on purpose: router.use
+// matches by prefix and would otherwise swallow that route, which is browser
+// traffic carrying the app's own session rather than an OAuth bearer token.
+//
+// requireMcpAuth enforces the mcp:read scope and populates req.auth, from which
+// the handler reads the account to scope every query to. It refuses rather than
+// falling back to unscoped when that identity is absent.
+router.use('/mcp', requireMcpAuth(), handleMcpRequest);
+
+// The consent screen behind the OAuth authorization endpoint. Reading the
+// request and refusing it are open, because the person arrives here straight
+// from their assistant and may not be signed in yet; approving is not, and binds
+// the grant to whoever the app's own login says they are.
+router.get('/oauth/consent/:requestId', oauthConsentController.getConsentRequest);
+router.post(
+  '/oauth/consent/:requestId/approve',
+  authenticate,
+  oauthConsentController.approveConsent
+);
+router.post('/oauth/consent/:requestId/deny', oauthConsentController.denyConsent);
 
 router.get('/dashboard', authenticate, reportController.getDashboard);
 router.get('/reports', authenticate, reportController.listReports);

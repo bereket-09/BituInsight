@@ -7,7 +7,6 @@
  * `image_bytes`, which is the size of the image the platform rendered.
  */
 
-const { readRows, readOne } = require('../db');
 const {
   jsonResult,
   notFoundResult,
@@ -18,7 +17,7 @@ const {
 } = require('../format');
 const { z, uuid, boundedInt, text } = require('../validate');
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'list_charts',
     {
@@ -37,7 +36,9 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const conditions = [];
+      // generated_charts has no user_id; ownership is the report's, so both
+      // statements below join processed_reports and anchor on it.
+      const conditions = ['{{SCOPE:pr.user_id}}'];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -49,11 +50,11 @@ function register(server) {
       if (args.chart_type) push('gc.chart_type = $?', args.chart_type);
       if (args.title_contains) push('gc.title ILIKE $?', `%${args.title_contains}%`);
 
-      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const where = `WHERE ${conditions.join(' AND ')}`;
       const limit = args.limit ?? 50;
       const offset = args.offset ?? 0;
 
-      const totals = await readOne(
+      const totals = await scope.readOne(
         `SELECT COUNT(*)::int AS total, COALESCE(SUM(gc.image_bytes), 0)::bigint AS total_bytes
          FROM generated_charts gc
          JOIN processed_reports pr ON pr.id = gc.report_id
@@ -61,7 +62,7 @@ function register(server) {
         values
       );
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT gc.id, gc.report_id, gc.chart_type, gc.title, gc.file_path,
                 gc.image_bytes, gc.created_at,
                 gc.config->>'id' AS config_id,
@@ -108,12 +109,12 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const row = await readOne(
+      const row = await scope.readOne(
         `SELECT gc.id, gc.report_id, gc.chart_type, gc.title, gc.image_bytes,
                 gc.created_at, gc.config, pr.kpi_name
          FROM generated_charts gc
          JOIN processed_reports pr ON pr.id = gc.report_id
-         WHERE gc.id = $1`,
+         WHERE gc.id = $1 AND {{SCOPE:pr.user_id}}`,
         [args.chart_id]
       );
 

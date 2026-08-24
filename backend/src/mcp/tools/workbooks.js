@@ -10,11 +10,10 @@
  * summarised rather than returned wholesale.
  */
 
-const { readRows, readOne } = require('../db');
 const { jsonResult, notFoundResult, truncateArray, compact, safeTool } = require('../format');
 const { z, uuid, text, boundedInt, REPORT_STATUSES } = require('../validate');
 
-function register(server) {
+function register(server, scope) {
   server.registerTool(
     'list_workbooks',
     {
@@ -32,7 +31,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const conditions = [];
+      const conditions = ['{{SCOPE:wu.user_id}}'];
       const values = [];
       const push = (fragment, value) => {
         values.push(value);
@@ -42,15 +41,15 @@ function register(server) {
       if (args.filename_contains) push('wu.original_filename ILIKE $?', `%${args.filename_contains}%`);
       if (args.user_email) push('u.email ILIKE $?', args.user_email);
 
-      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const where = `WHERE ${conditions.join(' AND ')}`;
 
-      const totals = await readOne(
+      const totals = await scope.readOne(
         `SELECT COUNT(*)::int AS total
          FROM workbook_uploads wu LEFT JOIN users u ON u.id = wu.user_id ${where}`,
         values
       );
 
-      const rows = await readRows(
+      const rows = await scope.readRows(
         `SELECT wu.id, wu.original_filename, wu.file_size, wu.sheet_count, wu.kpi_count,
                 wu.status, wu.created_at, wu.completed_at,
                 u.email AS user_email,
@@ -65,7 +64,7 @@ function register(server) {
                 COUNT(pr.id) FILTER (WHERE pr.status = 'failed')::int AS child_failed
          FROM workbook_uploads wu
          LEFT JOIN users u ON u.id = wu.user_id
-         LEFT JOIN processed_reports pr ON pr.workbook_id = wu.id
+         LEFT JOIN processed_reports pr ON pr.workbook_id = wu.id AND {{SCOPE:pr.user_id}}
          ${where}
          GROUP BY wu.id, u.email
          ORDER BY wu.created_at DESC
@@ -103,7 +102,7 @@ function register(server) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     safeTool(async (args) => {
-      const workbook = await readOne(
+      const workbook = await scope.readOne(
         `SELECT wu.id, wu.original_filename, wu.file_size, wu.sheet_count, wu.kpi_count,
                 wu.status, wu.created_at, wu.completed_at,
                 u.email AS user_email,
@@ -119,7 +118,7 @@ function register(server) {
                 jsonb_array_length(COALESCE(wu.summary->'preview'->'kpis', '[]'::jsonb)) AS preview_kpi_count
          FROM workbook_uploads wu
          LEFT JOIN users u ON u.id = wu.user_id
-         WHERE wu.id = $1`,
+         WHERE wu.id = $1 AND {{SCOPE:wu.user_id}}`,
         [args.workbook_id]
       );
 
@@ -127,7 +126,7 @@ function register(server) {
         return notFoundResult('workbook', args.workbook_id, 'Use list_workbooks to find valid ids.');
       }
 
-      const kpiConditions = ['pr.workbook_id = $1'];
+      const kpiConditions = ['pr.workbook_id = $1', '{{SCOPE:pr.user_id}}'];
       const kpiValues = [args.workbook_id];
       if (args.kpi_status) {
         kpiValues.push(args.kpi_status);
@@ -135,7 +134,7 @@ function register(server) {
       }
       kpiValues.push(args.kpi_limit ?? 60);
 
-      const kpis = await readRows(
+      const kpis = await scope.readRows(
         `SELECT pr.id AS report_id, pr.kpi_name, pr.sheet_name, pr.status,
                 pr.created_at, pr.completed_at, pr.error_message,
                 kw.slug AS workflow_slug,
@@ -155,9 +154,11 @@ function register(server) {
         kpiValues
       );
 
-      const statusCounts = await readRows(
-        `SELECT status::text AS status, COUNT(*)::int AS count
-         FROM processed_reports WHERE workbook_id = $1 GROUP BY status ORDER BY 2 DESC`,
+      const statusCounts = await scope.readRows(
+        `SELECT pr.status::text AS status, COUNT(*)::int AS count
+         FROM processed_reports pr
+         WHERE pr.workbook_id = $1 AND {{SCOPE:pr.user_id}}
+         GROUP BY pr.status ORDER BY 2 DESC`,
         [args.workbook_id]
       );
 
@@ -177,13 +178,13 @@ function register(server) {
 
       if (args.include_preview) {
         // Pulled with a bounded jsonb slice so a 100-sheet workbook cannot flood the response.
-        const previewRows = await readRows(
+        const previewRows = await scope.readRows(
           `SELECT COALESCE(jsonb_agg(elem ORDER BY ord), '[]'::jsonb) AS sheets
            FROM workbook_uploads wu
            CROSS JOIN LATERAL jsonb_array_elements(
              COALESCE(wu.summary->'preview'->'kpis', '[]'::jsonb)
            ) WITH ORDINALITY AS s(elem, ord)
-           WHERE wu.id = $1 AND s.ord <= $2`,
+           WHERE wu.id = $1 AND {{SCOPE:wu.user_id}} AND s.ord <= $2`,
           [args.workbook_id, args.preview_limit ?? 40]
         );
         const sheets = (previewRows[0] && previewRows[0].sheets) || [];
