@@ -11,6 +11,7 @@ import {
   GitBranch,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { workflowApi, reportApi, workbookApi } from '../api';
@@ -287,6 +288,23 @@ export default function Upload() {
 
   const previewPending = isWorkbook ? workbookPreviewMutation.isPending : previewMutation.isPending;
   const previewError = isWorkbook ? workbookPreviewMutation.error : previewMutation.error;
+
+  /*
+   * A preview can fail for reasons that have nothing to do with the file — a
+   * deploy rolling over mid-request, or an edge response that never reached the
+   * API. Those are worth retrying rather than starting again, so the panel below
+   * offers it, and surfaces the platform's request id when there is one so a
+   * failure that recurs can actually be traced.
+   */
+  const retryPreview = () => {
+    if (!file) return;
+    if (isWorkbook) workbookPreviewMutation.mutate(file);
+    else if (workflowSlug) previewMutation.mutate(file);
+  };
+  const failedResponse = (uploadError || previewError)?.response;
+  const requestId =
+    failedResponse?.headers?.['x-vercel-id'] || failedResponse?.headers?.['x-request-id'] || null;
+  const failedStatus = failedResponse?.status;
   const errorText =
     uploadError ||
     (previewError
@@ -729,13 +747,39 @@ export default function Upload() {
               className="mt-0.5 h-4 w-4 shrink-0 text-noc-danger"
               strokeWidth={ICON_STROKE}
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold tracking-tight text-noc-text">
                 {uploadError ? 'Upload could not continue' : 'Preview could not be generated'}
               </p>
               <p className="mt-1 break-words text-xs leading-relaxed text-noc-textDim">
                 {errorText}
               </p>
+              {!uploadError && (
+                <p className="mt-1.5 text-xs leading-relaxed text-noc-muted">
+                  You can still continue — the preview only chooses the sheet for you.
+                </p>
+              )}
+              {(requestId || failedStatus) && (
+                <p className="tabular mt-2 font-mono text-[11px] text-noc-muted">
+                  {failedStatus ? `status ${failedStatus}` : null}
+                  {failedStatus && requestId ? '  ·  ' : null}
+                  {requestId ? `request ${requestId}` : null}
+                </p>
+              )}
+              {!uploadError && file && (
+                <button
+                  type="button"
+                  onClick={retryPreview}
+                  disabled={previewPending}
+                  className="btn-secondary mt-3 px-3 py-1.5 text-xs"
+                >
+                  <RefreshCw
+                    className={clsx('h-3.5 w-3.5', previewPending && 'animate-spin')}
+                    strokeWidth={ICON_STROKE}
+                  />
+                  {previewPending ? 'Retrying…' : 'Try again'}
+                </button>
+              )}
             </div>
           </div>
         )}
