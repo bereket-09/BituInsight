@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const ExcelJS = require('exceljs');
 const pool = require('../db/pool');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { loadWorkbook } = require('../utils/workbookLoader');
 const { readSheetRows } = require('./excelParser.service');
 const { validateStructure } = require('../kpi-workflows/telecom-metric/validator');
 const { TELECOM_METRIC_SLUG, validateReport, processReport } = require('./workflowEngine.service');
@@ -74,8 +74,7 @@ function slugFromKpi(kpiName) {
 }
 
 async function loadWorkbookSheets(filePath) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+  const workbook = await loadWorkbook(filePath);
   return workbook.worksheets.map((ws, index) => ({
     index,
     name: ws.name,

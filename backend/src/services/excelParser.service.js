@@ -1,5 +1,5 @@
-const ExcelJS = require('exceljs');
 const logger = require('../utils/logger');
+const { loadWorkbook } = require('../utils/workbookLoader');
 
 const FIELD_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
@@ -156,12 +156,6 @@ function scoreSheetForWorkflow(allRows, workflowValidator, sheetName = '') {
   }
 
   return best;
-}
-
-async function loadWorkbook(filePath) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
-  return workbook;
 }
 
 async function getWorkbookPreview(filePath, workflowValidator = null) {
