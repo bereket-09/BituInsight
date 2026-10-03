@@ -102,6 +102,14 @@ export const workbookApi = {
     client.post(`/workbooks/${workbookId}/export/pptx`, payload, { responseType: 'blob' }),
 };
 
+// Automatic imports: keys for automations, and the log of what they sent.
+export const ingestApi = {
+  events: (params) => client.get('/ingest/events', { params }),
+  keys: () => client.get('/ingest/keys'),
+  createKey: (name) => client.post('/ingest/keys', { name }),
+  revokeKey: (id) => client.delete(`/ingest/keys/${id}`),
+};
+
 // The read-only MCP server's tool catalogue and access posture, for Settings.
 export const mcpApi = {
   connection: () => client.get('/mcp/connection'),

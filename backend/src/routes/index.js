@@ -7,6 +7,8 @@ const aggregationController = require('../controllers/aggregation.controller');
 const workbookController = require('../controllers/workbook.controller');
 const mcpController = require('../controllers/mcp.controller');
 const oauthConsentController = require('../controllers/oauthConsent.controller');
+const ingestController = require('../controllers/ingest.controller');
+const { authenticateIngestKey } = require('../middleware/ingestAuth.middleware');
 const { handleMcpRequest } = require('../mcp-http');
 const { requireMcpAuth } = require('../oauth');
 const { authenticate } = require('../middleware/auth.middleware');
@@ -74,6 +76,16 @@ router.post(
   oauthConsentController.approveConsent
 );
 router.post('/oauth/consent/:requestId/deny', oauthConsentController.denyConsent);
+
+// Automatic imports. The first two are called by an automation (Power Automate)
+// with an import key, not a signed-in session; the rest manage keys and show the
+// import log to the signed-in user.
+router.get('/ingest/ping', authenticateIngestKey, ingestController.ping);
+router.post('/ingest/files', authenticateIngestKey, ingestController.ingestFile);
+router.get('/ingest/events', authenticate, ingestController.listEvents);
+router.get('/ingest/keys', authenticate, ingestController.listKeys);
+router.post('/ingest/keys', authenticate, ingestController.createKey);
+router.delete('/ingest/keys/:id', authenticate, ingestController.revokeKey);
 
 router.get('/dashboard', authenticate, reportController.getDashboard);
 router.get('/reports', authenticate, reportController.listReports);

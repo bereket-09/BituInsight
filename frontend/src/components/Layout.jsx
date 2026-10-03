@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Upload,
   History,
+  Inbox,
   GitBranch,
   Settings,
   LogOut,
@@ -79,6 +80,7 @@ const navGroups = [
     items: [
       { to: '/upload', icon: Upload, label: 'Upload report' },
       { to: '/reports', icon: History, label: 'Historical reports' },
+      { to: '/imports', icon: Inbox, label: 'Automatic imports' },
     ],
   },
   {

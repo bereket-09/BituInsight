@@ -10,6 +10,7 @@ import WorkbookReport from './pages/WorkbookReport';
 import HistoricalReports from './pages/HistoricalReports';
 import AggregateView from './pages/AggregateView';
 import WorkflowExplorer from './pages/WorkflowExplorer';
+import AutomaticImports from './pages/AutomaticImports';
 import Settings from './pages/Settings';
 import OAuthAuthorize from './pages/OAuthAuthorize';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="workbooks/:id" element={<WorkbookReport />} />
         <Route path="reports/:id" element={<ReportDetails />} />
         <Route path="workflows" element={<WorkflowExplorer />} />
+        <Route path="imports" element={<AutomaticImports />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
