@@ -2,6 +2,7 @@ const fs = require('fs');
 const cmmWorkbook = require('../services/cmmWorkbook.service');
 const { generateWorkbookPptx } = require('../services/pptxExport.service');
 const { countCmmDataSheets } = require('../services/excelParser.service');
+const { findWorkflowForWorkbook } = require('../kpi-workflows/registry');
 
 async function previewWorkbook(req, res, next) {
   try {
@@ -9,6 +10,7 @@ async function previewWorkbook(req, res, next) {
 
     const dataSheetCount = await countCmmDataSheets(req.file.path);
     const preview = await cmmWorkbook.previewWorkbook(req.file.path);
+    const suggestedWorkflow = findWorkflowForWorkbook(preview.sheetNames || []);
 
     if (req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -17,7 +19,10 @@ async function previewWorkbook(req, res, next) {
     res.json({
       fileName: req.file.originalname,
       fileSize: req.file.size,
-      suggestWorkbookMode: dataSheetCount >= 2,
+      // Only steer someone into workbook mode when it can do something with the
+      // file, and never when a dedicated workflow was built for this export.
+      suggestWorkbookMode: dataSheetCount >= 2 && preview.validCount > 0 && !suggestedWorkflow,
+      suggestedWorkflow,
       dataSheetCount,
       ...preview,
     });

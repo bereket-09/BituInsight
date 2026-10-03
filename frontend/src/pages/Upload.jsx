@@ -66,6 +66,9 @@ export default function Upload() {
   const [kpiThresholds, setKpiThresholds] = useState({});
   const [uploadError, setUploadError] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  // A built-in workflow made for this exact export (e.g. Peak Attached Users),
+  // which reads it better than either generic mode.
+  const [suggestedWorkflow, setSuggestedWorkflow] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -117,6 +120,7 @@ export default function Upload() {
     onSuccess: (res) => {
       const data = res.data;
       setWorkbookPreview(data);
+      setSuggestedWorkflow(data.suggestedWorkflow || null);
       const initial = {};
       data.kpis?.forEach((kpi) => {
         if (kpi.valid) initial[kpi.kpiName] = 99;
@@ -143,6 +147,7 @@ export default function Upload() {
       .preview(formData)
       .then((res) => {
         const data = res.data;
+        setSuggestedWorkflow(data.suggestedWorkflow || null);
         if (data.suggestWorkbookMode && data.dataSheetCount >= 2) {
           setMode('workbook');
           setWorkbookPreview(data);
@@ -210,7 +215,20 @@ export default function Upload() {
     setValidationResult(null);
   };
 
+  /** Move the current file over to the workflow built for it, keeping the file. */
+  const applySuggestedWorkflow = () => {
+    if (!suggestedWorkflow) return;
+    setMode('single');
+    setWorkflowSlug(suggestedWorkflow.slug);
+    setWorkbookPreview(null);
+    setPreview(null);
+    setValidationResult(null);
+    setUploadError('');
+    setWizardStep(1);
+  };
+
   const resetFile = () => {
+    setSuggestedWorkflow(null);
     setFile(null);
     setPreview(null);
     setWorkbookPreview(null);
@@ -220,6 +238,7 @@ export default function Upload() {
 
   /** One path for browse and drop, so both validate the same way. */
   const handleFileSelected = (nextFile) => {
+    setSuggestedWorkflow(null);
     setValidationResult(null);
     setPreview(null);
     setWorkbookPreview(null);
@@ -242,6 +261,7 @@ export default function Upload() {
   };
 
   const switchMode = (nextMode) => {
+    setSuggestedWorkflow(null);
     setMode(nextMode);
     setWizardStep(0);
     setFile(null);
@@ -535,6 +555,24 @@ export default function Upload() {
                 <div className="skeleton h-3 w-5/6" />
               </div>
             )}
+          </div>
+        )}
+
+        {file && suggestedWorkflow && workflowSlug !== suggestedWorkflow.slug && (
+          <div className="rounded-xl border border-noc-accent/30 bg-noc-accent/[0.07] p-4">
+            <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
+              This is a {suggestedWorkflow.name} export
+            </p>
+            <p className="tabular mt-1 text-xs leading-relaxed text-noc-textDim">
+              {isWorkbook
+                ? 'CMM workbook mode expects PLMN-level success-rate sheets, so it cannot read this file. '
+                : ''}
+              The {suggestedWorkflow.name} workflow reads every sheet in it together — attached
+              users per technology across all nodes, with daily averages and peaks.
+            </p>
+            <button type="button" className="btn-primary mt-3" onClick={applySuggestedWorkflow}>
+              Use {suggestedWorkflow.name}
+            </button>
           </div>
         )}
 

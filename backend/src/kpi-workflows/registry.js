@@ -79,6 +79,12 @@ function listWorkflowSlugs() {
   return getAllWorkflows().map((w) => w.slug);
 }
 
+/** The built-in workflow made for this workbook's sheets, if one claims it. */
+function findWorkflowForWorkbook(sheetNames) {
+  const match = Object.values(WORKFLOW_REGISTRY).find((wf) => wf.matchesWorkbook?.(sheetNames));
+  return match ? { slug: match.slug, name: match.name } : null;
+}
+
 function isBuiltIn(slug) {
   return Object.prototype.hasOwnProperty.call(WORKFLOW_REGISTRY, slug);
 }
@@ -89,4 +95,5 @@ module.exports = {
   getAllWorkflows,
   listWorkflowSlugs,
   isBuiltIn,
+  findWorkflowForWorkbook,
 };

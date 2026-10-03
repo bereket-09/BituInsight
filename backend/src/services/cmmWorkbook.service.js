@@ -94,16 +94,19 @@ function analyzeSheet(worksheet, sheetIndex = 0) {
 
   const validation = validateStructure(headers, dataRows, metricColumnName);
 
+  // From the gap between distinct timestamps: several nodes share each time, so
+  // two adjacent rows are often the same moment and say nothing about the step.
   let granularity = 'unknown';
-  if (dataRows.length >= 2) {
-    const d1 = new Date(dataRows[0][0]);
-    const d2 = new Date(dataRows[1][0]);
-    if (!isNaN(d1) && !isNaN(d2)) {
-      const diffH = Math.abs(d2 - d1) / 3600000;
-      if (diffH <= 0.5) granularity = '15-min';
-      else if (diffH <= 25) granularity = 'daily';
-      else granularity = 'other';
-    }
+  const times = [...new Set(dataRows.map((r) => new Date(r[0]).getTime()).filter(Number.isFinite))].sort(
+    (a, b) => a - b
+  );
+  if (times.length >= 2) {
+    const gaps = times.slice(1).map((t, i) => t - times[i]).sort((a, b) => a - b);
+    const diffH = gaps[Math.floor(gaps.length / 2)] / 3600000;
+    if (diffH <= 0.5) granularity = '15-min';
+    else if (diffH <= 1.5) granularity = 'hourly';
+    else if (diffH <= 25) granularity = 'daily';
+    else granularity = 'other';
   }
 
   return {
@@ -142,6 +145,7 @@ async function previewWorkbook(filePath) {
     validKpis,
     invalidKpis,
     ignoredSheets: ignoredSheets.slice(0, 30),
+    sheetNames: allSheets.map((s) => s.sheetName),
   };
 }
 

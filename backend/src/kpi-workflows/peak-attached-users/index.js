@@ -5,6 +5,11 @@ const charts = require('./charts');
 const formatter = require('./formatter');
 const { loadSource } = require('./source');
 
+/** A Peak Attach Users export: any "Data for PEAK_ATTACH_…" sheet. */
+function matchesWorkbook(sheetNames) {
+  return sheetNames.some((name) => /^data for peak.attach/i.test(String(name || '')));
+}
+
 module.exports = {
   slug: 'peak-attached-users',
   name: 'Peak Attached Users',
@@ -22,6 +27,8 @@ module.exports = {
   chartDefinitions: charts.definitions,
   // Reads every "Data for …" sheet itself rather than one sheet the engine picks.
   loadSource,
+  // Lets the upload page send this export here instead of to CMM workbook mode.
+  matchesWorkbook,
   validator,
   transformer,
   calculator,
