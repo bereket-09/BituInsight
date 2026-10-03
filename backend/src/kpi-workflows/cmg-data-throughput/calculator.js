@@ -196,11 +196,6 @@ function generateSummary(calculated, transformed) {
         trend: metrics.mdc2SharePct >= 50 ? 'up' : 'down',
       },
       { label: 'Latest period', value: metrics.latestPeriod, trend: 'neutral' },
-      {
-        label: 'Latest total',
-        value: formatThroughputGbps(metrics.latestTotalGbps),
-        trend: 'up',
-      },
       { label: `Peak ${det.periodLabel || 'period'}`, value: metrics.peakPeriod, trend: 'up' },
       {
         label: 'Peak throughput',
