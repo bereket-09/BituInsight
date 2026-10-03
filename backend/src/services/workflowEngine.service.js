@@ -123,7 +123,18 @@ async function previewExcel(filePath, workflowSlug) {
   // code workflow it is the same lookup getWorkflow already did.
   const workflow = await resolveWorkflow(workflowSlug);
   const { getWorkbookPreview } = require('./excelParser.service');
-  return getWorkbookPreview(filePath, workflow.validator);
+  const preview = await getWorkbookPreview(filePath, workflow.validator);
+
+  // A workflow that reads the whole workbook can say up front whether this file
+  // is one it understands, instead of failing after the upload.
+  if (workflow.loadSource) {
+    const parsed = await workflow.loadSource(filePath);
+    const check = workflow.validator.validateStructure(parsed.headers, parsed.dataRows);
+    preview.fileCheck = { valid: check.valid, errors: check.errors, rowCount: check.filteredRowCount };
+  }
+  const { findWorkflowForWorkbook } = require('../kpi-workflows/registry');
+  preview.suggestedWorkflow = findWorkflowForWorkbook(preview.sheets.map((s) => s.name));
+  return preview;
 }
 
 async function validateReport(workflowSlug, filePath, parseOptions = {}, workflowContext = {}) {

@@ -101,6 +101,7 @@ export default function Upload() {
     onSuccess: (res) => {
       const data = res.data;
       setPreview(data);
+      if (data.suggestedWorkflow) setSuggestedWorkflow(data.suggestedWorkflow);
       const rec = data.sheets?.find((s) => s.isRecommended) || data.sheets?.[0];
       if (rec) {
         setSheetIndex(rec.index);
@@ -271,6 +272,10 @@ export default function Upload() {
     setWorkflowSlug('');
     setUploadError('');
   };
+
+  // Set when a workflow that reads the whole workbook has already looked at the
+  // file and found nothing it can use; uploading it would only produce a failure.
+  const fileRejected = preview?.fileCheck ? !preview.fileCheck.valid : false;
 
   const selectedWorkflow = useMemo(
     () => workflows?.find((w) => w.slug === workflowSlug),
@@ -567,8 +572,8 @@ export default function Upload() {
               {isWorkbook
                 ? 'CMM workbook mode expects PLMN-level success-rate sheets, so it cannot read this file. '
                 : ''}
-              The {suggestedWorkflow.name} workflow reads every sheet in it together — attached
-              users per technology across all nodes, with daily averages and peaks.
+              The {suggestedWorkflow.name} workflow is built for this export and reads it as
+              intended. Your file is kept — no need to upload it again.
             </p>
             <button type="button" className="btn-primary mt-3" onClick={applySuggestedWorkflow}>
               Use {suggestedWorkflow.name}
@@ -702,6 +707,26 @@ export default function Upload() {
         {/* ——— Single KPI configure ——— */}
         {!isWorkbook && wizardStep === 2 && preview && workflowSlug && (
           <div className="space-y-4">
+            {fileRejected && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-xl border border-noc-danger/30 bg-noc-danger/[0.07] p-4"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-noc-danger" strokeWidth={2.25} />
+                <div>
+                  <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
+                    This file does not fit {selectedWorkflow?.name || 'this workflow'}
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {preview.fileCheck.errors.map((err, i) => (
+                      <li key={i} className="text-xs leading-relaxed text-noc-textDim">
+                        {err.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
             <ExcelPreview
               preview={preview}
               workflowSlug={workflowSlug}
@@ -749,11 +774,20 @@ export default function Upload() {
                       ? `Validation passed — ${validationResult.rowCount} rows ready`
                       : 'Validation failed'}
                   </p>
-                  {!validationResult.valid && (
-                    <p className="mt-1 text-xs leading-relaxed text-noc-textDim">
-                      Adjust the header or data start row above, then validate again.
-                    </p>
-                  )}
+                  {!validationResult.valid &&
+                    (validationResult.errors?.length ? (
+                      <ul className="mt-1.5 space-y-1">
+                        {validationResult.errors.map((err, i) => (
+                          <li key={i} className="text-xs leading-relaxed text-noc-textDim">
+                            {err.message}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-xs leading-relaxed text-noc-textDim">
+                        Adjust the header or data start row above, then validate again.
+                      </p>
+                    ))}
                 </div>
               </div>
             )}
@@ -885,6 +919,7 @@ export default function Upload() {
                     !workflowSlug ||
                     !preview ||
                     uploadMutation.isPending ||
+                    fileRejected ||
                     (validationResult && !validationResult.valid))
               }
               className="btn-primary min-w-[168px]"

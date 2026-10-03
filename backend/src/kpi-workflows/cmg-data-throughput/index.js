@@ -4,6 +4,14 @@ const calculator = require('./calculator');
 const charts = require('./charts');
 const formatter = require('./formatter');
 
+/** A CMG throughput audit export: a CMG throughput sheet or a ul/dl packets data sheet. */
+function matchesWorkbook(sheetNames) {
+  return sheetNames.some((raw) => {
+    const name = String(raw || '');
+    return (/cmg/i.test(name) && /throughput/i.test(name)) || /^data for (ul|dl)packets/i.test(name);
+  });
+}
+
 module.exports = {
   slug: 'cmg-data-throughput',
   name: 'CMG Data Throughput',
@@ -24,5 +32,6 @@ module.exports = {
   calculator,
   charts,
   formatter,
+  matchesWorkbook,
   generateSummary: calculator.generateSummary,
 };
