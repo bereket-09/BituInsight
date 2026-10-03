@@ -6,7 +6,8 @@ function makeFormatter(unit) {
   return (value) => {
     if (!Number.isFinite(value)) return '—';
     const abs = Math.abs(value);
-    const decimals = abs >= 100 ? 0 : abs >= 1 ? 2 : 3;
+    // Whole numbers read fastest; keep a decimal only where it carries meaning.
+    const decimals = abs >= 10 ? 0 : abs >= 1 ? 1 : 2;
     const text = value.toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
@@ -35,10 +36,8 @@ function buildFindings(analysis, options = {}) {
       id: 'data-quality',
       category: 'data-quality',
       severity: analysis.quality.grade === 'unreliable' ? 'critical' : 'major',
-      title: `Data quality is ${analysis.quality.grade} (${analysis.quality.score}/100)`,
-      detail: `${analysis.quality.coveragePct}% of expected data points are present. ${analysis.quality.issues
-        .map((i) => i.message)
-        .join('. ')}. Treat the findings below as provisional.`,
+      title: 'Some data is missing or wrong',
+      detail: `Only ${analysis.quality.coveragePct}% of the data arrived, so take the rest of this report with care.`,
       evidence: {
         score: analysis.quality.score,
         coveragePct: analysis.quality.coveragePct,
@@ -50,8 +49,8 @@ function buildFindings(analysis, options = {}) {
       id: 'data-quality-minor',
       category: 'data-quality',
       severity: 'minor',
-      title: `Minor data-quality issues (${analysis.quality.score}/100)`,
-      detail: analysis.quality.issues.map((i) => i.message).join('. '),
+      title: 'A few small gaps in the data',
+      detail: `${analysis.quality.issues[0].message}.`,
       evidence: { score: analysis.quality.score, issues: analysis.quality.issues.map((i) => i.message) },
     });
   }
@@ -74,11 +73,11 @@ function buildFindings(analysis, options = {}) {
       category: 'anomaly',
       severity: topSeverity,
       title:
-        group.length === 1
-          ? `${kind === 'spike' ? 'Traffic spike' : 'Traffic dip'} at ${worst.period}`
-          : `${group.length} ${kind}s detected, worst at ${worst.period}`,
-      detail: `${worst.period} recorded ${fmt(worst.value)} against an expected ${fmt(worst.expected)} for ${worst.comparedTo} (${signed(worst.deviationPct)}, ${worst.score}σ).${
-        group.length > 1 ? ` ${group.length - 1} further ${kind}${group.length > 2 ? 's' : ''} in the same period.` : ''
+        kind === 'spike'
+          ? `Unusually high at ${worst.period}`
+          : `Unusually low at ${worst.period}`,
+      detail: `It was ${fmt(worst.value)}, but about ${fmt(worst.expected)} is normal.${
+        group.length > 1 ? ` This happened ${group.length} times in total.` : ''
       }`,
       evidence: {
         count: group.length,
@@ -95,8 +94,8 @@ function buildFindings(analysis, options = {}) {
       id: 'level-shift',
       category: 'anomaly',
       severity: shift.severity,
-      title: `Sustained level shift ${shift.direction} at ${shift.at}`,
-      detail: `The series moved from around ${fmt(shift.before)} to ${fmt(shift.after)} (${signed(shift.changePct)}) and stayed there. A step change like this usually points to a configuration change, a node entering or leaving service, or rerouted traffic rather than demand.`,
+      title: `${shift.after >= shift.before ? 'Jumped up' : 'Dropped down'} at ${shift.at} and stayed there`,
+      detail: `It went from about ${fmt(shift.before)} to about ${fmt(shift.after)}. Something in the network may have changed.`,
       evidence: shift,
     });
   }
@@ -108,8 +107,8 @@ function buildFindings(analysis, options = {}) {
       id: 'flatline',
       category: 'data-quality',
       severity: worst.severity,
-      title: `Flatlined values from ${worst.from} to ${worst.to}`,
-      detail: `${worst.pointCount} consecutive periods report exactly ${fmt(worst.value)}. On a live counter this normally means a stuck measurement or a padded export rather than genuinely constant traffic.`,
+      title: `Same number repeated from ${worst.from} to ${worst.to}`,
+      detail: `${worst.pointCount} readings in a row show exactly ${fmt(worst.value)}. The counter may be stuck.`,
       evidence: { runs: analysis.anomalies.flatlines },
     });
   }
@@ -121,8 +120,8 @@ function buildFindings(analysis, options = {}) {
       id: 'trend',
       category: 'trend',
       severity: Math.abs(t.slopePerDayPct) >= 5 ? 'major' : 'minor',
-      title: `${t.direction === 'rising' ? 'Rising' : 'Falling'} trend of ${signed(t.slopePerDayPct)} per day`,
-      detail: `Over ${t.spanDays} days the series moved ${signed(t.totalChangePct)} overall (${fmt(t.slopePerDay)} per day, r² ${t.r2}, ${t.confidence} confidence). Fitted on ${t.basis}.`,
+      title: t.direction === 'rising' ? 'Going up over time' : 'Going down over time',
+      detail: `It changed by ${signed(t.totalChangePct)} over ${t.spanDays} days.`,
       evidence: t,
     });
   }
@@ -135,9 +134,9 @@ function buildFindings(analysis, options = {}) {
     else if (cap.utilizationPct >= 75) severity = 'major';
     else if (cap.utilizationPct >= 60) severity = 'minor';
 
-    let detail = `Busy-period load (95th percentile) is ${fmt(cap.planningPeak)} against a ${fmt(cap.threshold)} threshold — ${cap.utilizationPct}% utilized, ${cap.headroomPct}% headroom.`;
+    let detail = `At its busiest it uses ${cap.utilizationPct}% of the limit.`;
     if (cap.daysToSaturation) {
-      detail += ` At the current growth rate the threshold is reached in about ${cap.daysToSaturation} days (${cap.saturationDate}), ${cap.saturationConfidence} confidence.`;
+      detail += ` If this continues, it could hit the limit around ${cap.saturationDate}.`;
     }
 
     findings.push({
@@ -145,9 +144,7 @@ function buildFindings(analysis, options = {}) {
       category: 'capacity',
       severity,
       title:
-        severity === 'info'
-          ? `Comfortable headroom (${cap.headroomPct}% free)`
-          : `Capacity at ${cap.utilizationPct}% of threshold`,
+        severity === 'info' ? 'Plenty of room left' : 'Getting close to the limit',
       detail,
       evidence: cap,
     });
@@ -160,8 +157,8 @@ function buildFindings(analysis, options = {}) {
       id: 'imbalance',
       category: 'distribution',
       severity: b.skewPct >= 30 ? 'major' : 'minor',
-      title: `Load skewed toward ${b.dominant.label} (${b.dominant.sharePct}%)`,
-      detail: `${b.dominant.label} carries ${b.dominant.sharePct}% against ${b.weakest.label} at ${b.weakest.sharePct}% — a ${b.skewPct} point gap from an even split. Worth checking whether the split is intentional.`,
+      title: `${b.dominant.label} is doing more of the work`,
+      detail: `${b.dominant.label} carries ${b.dominant.sharePct}% and ${b.weakest.label} carries ${b.weakest.sharePct}%.`,
       evidence: b,
     });
   }
@@ -178,55 +175,41 @@ function buildFindings(analysis, options = {}) {
  * the Claude narrative layer is unavailable — so a report is never left without
  * a written summary.
  */
-function composeNarrative(analysis, findings, options = {}) {
-  const fmt = makeFormatter(options.unit);
-  const kpi = options.kpiName || 'KPI';
+function composeNarrative(analysis, findings) {
   const scope = analysis.scope;
 
   const sentences = [];
-  sentences.push(
-    `${kpi} across ${scope.spanLabel} at ${scope.cadenceLabel} resolution (${scope.pointCount} periods). Typical level ${fmt(analysis.capacity.typical)}, busy-period peak ${fmt(analysis.capacity.planningPeak)}.`
-  );
+  sentences.push(`This report covers ${scope.spanLabel}.`);
 
   const blocking = findings.filter((f) => f.severity === 'critical' || f.severity === 'major');
   if (blocking.length) {
     sentences.push(
-      `${blocking.length} item${blocking.length > 1 ? 's' : ''} need attention: ${blocking.map((f) => f.title.toLowerCase()).join('; ')}.`
+      `${blocking.length === 1 ? 'One thing needs' : `${blocking.length} things need`} a look: ${blocking[0].title.toLowerCase()}.`
     );
-  } else if (findings.length) {
-    sentences.push('Nothing severe: only minor observations in this period.');
   } else {
-    sentences.push('No anomalies, trend, or data-quality issues detected in this period.');
-  }
-
-  if (analysis.trend.available && analysis.trend.direction !== 'flat') {
-    sentences.push(
-      `The series is ${analysis.trend.direction} at ${signed(analysis.trend.slopePerDayPct)} per day (${analysis.trend.confidence} confidence).`
-    );
+    sentences.push('Everything looks normal.');
   }
 
   const recommendations = [];
   for (const f of findings.slice(0, 4)) {
     if (f.category === 'data-quality' && f.severity !== 'minor') {
-      recommendations.push('Re-run the NetAct export for this period before acting on the numbers.');
+      recommendations.push('Export the data again before trusting these numbers.');
     } else if (f.category === 'anomaly' && f.id === 'anomaly-dip') {
-      recommendations.push(`Check node and link health around ${f.evidence.worst.period}.`);
+      recommendations.push(`Check the network around ${f.evidence.worst.period}.`);
     } else if (f.category === 'anomaly' && f.id === 'anomaly-spike') {
-      recommendations.push(`Confirm whether the load at ${f.evidence.worst.period} was expected.`);
+      recommendations.push(`Check if the high traffic at ${f.evidence.worst.period} was expected.`);
     } else if (f.id === 'level-shift') {
-      recommendations.push(`Correlate the step change at ${f.evidence.at} against the change log.`);
+      recommendations.push(`Check what changed in the network at ${f.evidence.at}.`);
     } else if (f.category === 'capacity' && f.severity !== 'info') {
-      recommendations.push('Start capacity planning — busy-period utilization is above the comfort band.');
-    } else if (f.category === 'trend' && f.severity === 'major') {
-      recommendations.push('Extend the observation window to confirm the trend before committing to capacity changes.');
+      recommendations.push('Plan for more capacity soon.');
     }
   }
 
   return {
     source: 'deterministic',
     summary: sentences.join(' '),
-    keyPoints: findings.slice(0, 5).map((f) => f.title),
-    recommendations: [...new Set(recommendations)].slice(0, 4),
+    keyPoints: findings.slice(0, 3).map((f) => f.title),
+    recommendations: [...new Set(recommendations)].slice(0, 2),
   };
 }
 
@@ -254,15 +237,6 @@ function toNarrativeBrief(analysis, findings, options = {}) {
           direction: analysis.trend.direction,
           perDayPct: analysis.trend.slopePerDayPct,
           totalChangePct: analysis.trend.totalChangePct,
-          r2: analysis.trend.r2,
-          confidence: analysis.trend.confidence,
-        }
-      : null,
-    forecast: analysis.forecast.available
-      ? {
-          horizon: analysis.forecast.horizon,
-          unitLabel: analysis.forecast.unitLabel,
-          last: analysis.forecast.projections[analysis.forecast.projections.length - 1],
         }
       : null,
     dataQuality: {

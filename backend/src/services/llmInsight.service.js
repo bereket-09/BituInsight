@@ -28,18 +28,18 @@ const NARRATIVE_SCHEMA = {
     summary: {
       type: 'string',
       description:
-        'Two to four sentences an operations manager can read without opening the charts. Lead with what happened, then why it matters.',
+        'One or two short sentences in plain words. Say what happened and whether it needs attention.',
     },
     keyPoints: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Three to five short factual bullets, each tied to a number from the brief.',
+      description: 'Up to three very short bullets in plain words, at most one number each.',
     },
     recommendations: {
       type: 'array',
       items: { type: 'string' },
       description:
-        'Zero to four concrete next actions. Return an empty array when the data genuinely warrants no action.',
+        'Zero to two short, simple next actions. Return an empty array when nothing needs doing.',
     },
     riskLevel: {
       type: 'string',
@@ -61,7 +61,12 @@ Ground every claim in the brief. Never introduce a number that is not present in
 
 When the analysis found nothing of concern, say that plainly and return an empty recommendations array. A quiet period is a valid, useful result; do not manufacture concerns to fill space.
 
-Write for a reader who knows telecom but is skimming. Complete sentences, no arrow chains, no invented severity language.`;
+Keep it short and easy to read. Write for someone who is not a data analyst:
+- Use everyday words. Say "went up", "dropped", "higher than normal", "close to the limit".
+- Never use statistics terms or show calculations: no σ, sigma, r², standard deviation, percentile, regression, confidence interval, slope, z-score or baseline.
+- Do not talk about forecasts or projections.
+- At most one number per sentence, and round it.
+- Complete sentences, no arrow chains, no invented severity language.`;
 
 /**
  * Appended for providers whose structured output is not schema-enforced. It
@@ -183,8 +188,8 @@ function validateNarrative(parsed) {
 
   return {
     summary,
-    keyPoints: toStringList(node.keyPoints, 8),
-    recommendations: toStringList(node.recommendations, 8),
+    keyPoints: toStringList(node.keyPoints, 3),
+    recommendations: toStringList(node.recommendations, 2),
     riskLevel: RISK_LEVELS.has(risk) ? risk : 'none',
   };
 }

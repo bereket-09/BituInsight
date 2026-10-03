@@ -6,7 +6,6 @@ import {
   TrendingDown,
   Minus,
   Activity,
-  Gauge,
   Check,
   ChevronDown,
 } from 'lucide-react';
@@ -22,7 +21,7 @@ const SEVERITY = {
   critical: {
     rank: 0,
     marks: 3,
-    label: 'Critical',
+    label: 'Urgent',
     text: 'text-noc-danger',
     rail: 'bg-noc-danger',
     chip: 'bg-noc-danger/10 text-noc-danger',
@@ -31,7 +30,7 @@ const SEVERITY = {
   major: {
     rank: 1,
     marks: 2,
-    label: 'Major',
+    label: 'Important',
     text: 'text-noc-warning',
     rail: 'bg-noc-warning',
     chip: 'bg-noc-warning/10 text-noc-warning',
@@ -40,7 +39,7 @@ const SEVERITY = {
   minor: {
     rank: 2,
     marks: 1,
-    label: 'Minor',
+    label: 'Small',
     text: 'text-noc-info',
     rail: 'bg-noc-info',
     chip: 'bg-noc-info/10 text-noc-info',
@@ -58,6 +57,9 @@ const SEVERITY = {
 };
 
 const severityOf = (severity) => SEVERITY[severity] || SEVERITY.info;
+
+/** Only the few findings that matter most; the rest is noise for a skim. */
+const MAX_FINDINGS = 3;
 
 /*
  * The narrative layer is provider-agnostic: `source` says whether a model wrote
@@ -124,9 +126,7 @@ function Vital({ icon: Icon, label, value, sub, valueClass = 'text-noc-text', in
     <div
       className={clsx(
         'px-5 py-4',
-        index % 2 === 1 && 'border-l border-noc-border',
-        index === 2 && 'lg:border-l lg:border-noc-border',
-        index >= 2 && 'border-t border-noc-border lg:border-t-0'
+        index > 0 && 'border-t border-noc-border sm:border-l sm:border-t-0'
       )}
     >
       <dt className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-noc-muted">
@@ -197,7 +197,7 @@ function Finding({ finding }) {
 export default function IntelligencePanel({ intelligence }) {
   if (!intelligence?.available) return null;
 
-  const { narrative, findings = [], dataQuality, trend, forecast, capacity, dailyShape, scope } =
+  const { narrative, findings = [], dataQuality, trend, dailyShape, scope } =
     intelligence;
 
   const attribution = narrativeAttribution(narrative);
@@ -207,39 +207,41 @@ export default function IntelligencePanel({ intelligence }) {
   );
   const topSeverity = ranked.length ? severityOf(ranked[0].severity) : null;
 
+  const QUALITY_WORDS = {
+    good: 'Good',
+    acceptable: 'OK',
+    degraded: 'Patchy',
+    unreliable: 'Poor',
+    unusable: 'Poor',
+  };
+  const DIRECTION_WORDS = { rising: 'Going up', falling: 'Going down' };
+
   const vitals = [
     {
       icon: ShieldCheck,
-      label: 'Data quality',
-      value: `${dataQuality?.score ?? '—'}/100`,
-      sub: `${dataQuality?.grade ?? 'unknown'} · ${dataQuality?.coveragePct ?? 0}% coverage`,
+      label: 'Data',
+      value: QUALITY_WORDS[dataQuality?.grade] ?? '—',
+      sub: dataQuality?.coveragePct != null ? `${dataQuality.coveragePct}% received` : undefined,
       valueClass: qualityClass,
     },
     {
       icon: Activity,
-      label: 'Trend',
-      value:
-        trend?.available && trend.direction !== 'flat'
-          ? `${trend.slopePerDayPct > 0 ? '+' : ''}${trend.slopePerDayPct}%/day`
-          : 'Flat',
-      sub: trend?.available ? `r² ${trend.r2} · ${trend.confidence} confidence` : 'not fitted',
-    },
-    {
-      icon: Gauge,
-      label: 'Busy-period peak',
-      value: capacity?.planningPeak?.toLocaleString() ?? '—',
+      label: 'Direction',
+      value: (trend?.available && DIRECTION_WORDS[trend.direction]) || 'Steady',
       sub:
-        capacity?.utilizationPct != null
-          ? `${capacity.utilizationPct}% of threshold`
-          : `${capacity?.peakToTypicalRatio ?? '—'}× typical`,
+        trend?.available && trend.direction !== 'flat' && trend.totalChangePct != null
+          ? `${trend.totalChangePct > 0 ? '+' : ''}${trend.totalChangePct}% overall`
+          : undefined,
     },
     {
       icon: dailyShape ? Activity : Minus,
-      label: 'Busiest hour',
+      label: 'Busiest time',
       value: dailyShape?.busiest?.label ?? '—',
-      sub: dailyShape ? `quietest ${dailyShape.quietest.label}` : 'needs sub-daily data',
+      sub: dailyShape ? `quietest ${dailyShape.quietest.label}` : undefined,
     },
   ];
+
+  const shown = ranked.slice(0, MAX_FINDINGS);
 
   return (
     <div className="space-y-5">
@@ -295,7 +297,7 @@ export default function IntelligencePanel({ intelligence }) {
 
       {/* ——— Analytical vitals ——— */}
       <div className="card p-0">
-        <dl className="grid grid-cols-2 lg:grid-cols-4">
+        <dl className="grid grid-cols-1 sm:grid-cols-3">
           {vitals.map((vital, i) => (
             <Vital key={vital.label} index={i} {...vital} />
           ))}
@@ -306,15 +308,15 @@ export default function IntelligencePanel({ intelligence }) {
       <section className="card overflow-hidden p-0">
         <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-noc-border/70 px-6 py-3.5">
           <TrendIcon direction={trend?.direction} />
-          <h3 className="text-sm font-semibold tracking-tight text-noc-text">Findings</h3>
+          <h3 className="text-sm font-semibold tracking-tight text-noc-text">What we found</h3>
           {ranked.length > 0 && topSeverity && (
             <span className={clsx('badge', topSeverity.chip)}>
-              {ranked.length} open · {topSeverity.label} highest
+              {shown.length} to look at
             </span>
           )}
-          <span className="tabular ml-auto text-xs text-noc-muted">
-            {scope?.pointCount} periods · {scope?.cadenceLabel} · {scope?.spanLabel}
-          </span>
+          {scope?.spanLabel && (
+            <span className="tabular ml-auto text-xs text-noc-muted">{scope.spanLabel}</span>
+          )}
         </header>
 
         {ranked.length === 0 ? (
@@ -324,63 +326,22 @@ export default function IntelligencePanel({ intelligence }) {
             </span>
             <div>
               <p className="text-[15px] font-semibold tracking-tight text-noc-text">
-                All checks clear
+                All good
               </p>
-              <p className="tabular mt-1 max-w-[62ch] text-sm leading-relaxed text-noc-textDim">
-                Anomaly, trend-break and data-quality checks passed across{' '}
-                {scope?.pointCount ?? 'all'} periods. Nothing needs attention in this window.
+              <p className="mt-1 max-w-[62ch] text-sm leading-relaxed text-noc-textDim">
+                Nothing unusual. No action needed.
               </p>
             </div>
           </div>
         ) : (
           <ul className="divide-y divide-noc-border">
-            {ranked.map((f) => (
+            {shown.map((f) => (
               <Finding key={f.id} finding={f} />
             ))}
           </ul>
         )}
       </section>
 
-      {/* ——— Forecast ——— */}
-      {forecast?.available && (
-        <section className="card overflow-hidden p-0">
-          <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-noc-border/70 px-6 py-3.5">
-            <h3 className="text-sm font-semibold tracking-tight text-noc-text">
-              Projection · next {forecast.horizon} {forecast.unitLabel}s
-            </h3>
-            <span className="text-xs text-noc-muted">
-              95% band · {forecast.confidence} confidence
-            </span>
-          </header>
-          <div className="overflow-x-auto">
-            <table className="tabular w-full text-sm">
-              <thead>
-                <tr className="border-b border-noc-border text-left text-[11px] uppercase tracking-[0.12em] text-noc-muted">
-                  <th className="px-6 py-2.5 font-medium">Date</th>
-                  <th className="px-6 py-2.5 font-medium">Projected</th>
-                  <th className="px-6 py-2.5 font-medium">Range</th>
-                </tr>
-              </thead>
-              <tbody>
-                {forecast.projections.map((p) => (
-                  <tr
-                    key={p.step}
-                    className="border-b border-noc-border/50 transition-colors last:border-0 hover:bg-noc-accent/[0.04]"
-                  >
-                    <td className="px-6 py-2.5 text-noc-muted">{p.date}</td>
-                    <td className="px-6 py-2.5 font-mono font-medium text-noc-text">
-                      {p.value.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-2.5 font-mono text-xs text-noc-muted">
-                      {p.low.toLocaleString()} – {p.high.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
