@@ -1,5 +1,6 @@
 const pool = require('../db/pool');
 const { getAllWorkflows, resolveWorkflow, isBuiltIn } = require('../kpi-workflows/registry');
+const { ensureBuiltInWorkflows } = require('../services/workflowSync.service');
 
 /**
  * Resolve a catalogue row to its runtime workflow. `resolveWorkflow` also warms the
@@ -18,6 +19,7 @@ async function describeSafely(slug) {
 
 async function listWorkflows(req, res, next) {
   try {
+    await ensureBuiltInWorkflows();
     const dbResult = await pool.query(
       'SELECT id, slug, name, description, version, metadata, is_active FROM kpi_workflows WHERE is_active = TRUE ORDER BY name'
     );

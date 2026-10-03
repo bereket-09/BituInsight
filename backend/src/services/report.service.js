@@ -7,8 +7,10 @@ const logger = require('../utils/logger');
 const { processReport, validateReport, previewExcel } = require('./workflowEngine.service');
 const { sendToTeams } = require('./teams.service');
 const chartStorage = require('./chartStorage.service');
+const { ensureBuiltInWorkflows } = require('./workflowSync.service');
 
 async function getWorkflowIdBySlug(slug) {
+  await ensureBuiltInWorkflows();
   const result = await pool.query('SELECT id FROM kpi_workflows WHERE slug = $1', [slug]);
   if (result.rows.length === 0) throw new Error(`Workflow not found in database: ${slug}`);
   return result.rows[0].id;

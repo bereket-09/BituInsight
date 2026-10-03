@@ -6,6 +6,8 @@ function makeFormatter(unit) {
   return (value) => {
     if (!Number.isFinite(value)) return '—';
     const abs = Math.abs(value);
+    // Headcounts in the millions read as "3.84M users", not seven digits.
+    if (abs >= 1e6) return `${(value / 1e6).toFixed(2)}M${unit ? ` ${unit}` : ''}`;
     // Whole numbers read fastest; keep a decimal only where it carries meaning.
     const decimals = abs >= 10 ? 0 : abs >= 1 ? 1 : 2;
     const text = value.toLocaleString('en-US', {

@@ -220,7 +220,7 @@ function buildChartJsConfig(chartConfig) {
     };
   }
 
-  const isStacked = chartConfig.id === 'traffic-stacked-area';
+  const isStacked = chartConfig.id === 'traffic-stacked-area' || chartConfig.stacked === true;
   const isPercent = chartConfig.id === 'contribution-trend';
 
   if (!data?.datasets?.length) {
@@ -257,6 +257,8 @@ function buildChartJsConfig(chartConfig) {
         },
         y: {
           stacked: isStacked,
+          // Stacked areas only read true from zero; a cropped axis shrinks the bottom layer.
+          beginAtZero: isStacked,
           min: isPercent ? 0 : undefined,
           max: isPercent ? 100 : undefined,
           ticks: {
@@ -267,6 +269,17 @@ function buildChartJsConfig(chartConfig) {
           grid: { color: DARK_THEME.grid, drawBorder: false },
           border: { display: false },
         },
+        // A second value axis, for charts that pair two measures of different size.
+        ...(extraOptions.scales?.y1
+          ? {
+              y1: {
+                position: 'right',
+                ticks: { color: DARK_THEME.muted, font: fontSpec(11), callback: formatAxisValue },
+                grid: { drawOnChartArea: false },
+                border: { display: false },
+              },
+            }
+          : {}),
       },
     },
   };

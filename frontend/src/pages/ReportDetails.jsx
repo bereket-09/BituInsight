@@ -22,6 +22,8 @@ import CmgThroughputExplorer from '../components/CmgThroughputExplorer';
 import CmgThroughputDataTable from '../components/CmgThroughputDataTable';
 import SeriesDataTable from '../components/SeriesDataTable';
 import CmgThroughputInsight from '../components/CmgThroughputInsight';
+import AttachedUsersExplorer from '../components/AttachedUsersExplorer';
+import AttachedUsersInsight from '../components/AttachedUsersInsight';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ReportPptExportButton from '../components/ReportPptExportButton';
 
@@ -92,6 +94,7 @@ function HighlightStrip({ highlights }) {
                   strokeWidth={ICON_STROKE}
                 />
               </dd>
+              {h.sub && <p className="tabular mt-1 text-xs text-noc-muted">{h.sub}</p>}
             </div>
           );
         })}
@@ -359,6 +362,8 @@ export default function ReportDetails() {
 
           {report.workflow_slug === 'cmg-data-throughput' ? (
             <CmgThroughputInsight summary={summary} calculated={calculated} />
+          ) : report.workflow_slug === 'peak-attached-users' ? (
+            <AttachedUsersInsight summary={summary} calculated={calculated} />
           ) : (
             // Older reports (and any run where the intelligence layer was skipped)
             // still carry the workflow's own template narrative.
@@ -414,6 +419,13 @@ export default function ReportDetails() {
                   timeSeries={timeSeries}
                   kpiName={kpiLabel}
                   valueType={valueType}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                />
+              ) : report.workflow_slug === 'peak-attached-users' ? (
+                <AttachedUsersExplorer
+                  timeSeries={timeSeries}
+                  calculated={calculated}
                   spanId={spanId}
                   onSpanChange={setSpanId}
                 />
@@ -482,7 +494,14 @@ export default function ReportDetails() {
                   timeSeries={timeSeries}
                   spanId={spanId}
                   onSpanChange={setSpanId}
-                  unit={isPercentKpi ? '%' : metrics?.unit}
+                  unit={
+                    isPercentKpi
+                      ? '%'
+                      : // Its columns mix users and Erlang; the headers carry the unit instead.
+                        report.workflow_slug === 'peak-attached-users'
+                        ? undefined
+                        : metrics?.unit
+                  }
                   valueLabel={kpiLabel}
                   percentOnly={isPercentKpi}
                   fileNameParts={[kpiLabel, id, 'data-points']}

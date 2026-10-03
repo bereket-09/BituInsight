@@ -27,7 +27,24 @@ const ANALYTICS_PROFILES = {
     ],
   },
   'telecom-metric': { unit: '', streams: null },
+  // Balance is checked between sites, where a lopsided split is a risk. The 2G/3G/4G
+  // split is expected to be lopsided and is reported as a share, not a finding.
+  'peak-attached-users': {
+    unit: 'users',
+    streams: [
+      { key: 'mdc1', label: 'MDC1' },
+      { key: 'mdc2', label: 'MDC2' },
+    ],
+  },
 };
+
+/**
+ * Most workflows read the one sheet the parser picks. A workflow whose data is
+ * spread over several sheets supplies loadSource() and reads the workbook itself.
+ */
+function loadParsed(workflow, filePath, options) {
+  return workflow.loadSource ? workflow.loadSource(filePath) : parseExcelFile(filePath, options);
+}
 
 /**
  * Run the statistical analysis and the executive narrative over a calculated
@@ -112,7 +129,7 @@ async function previewExcel(filePath, workflowSlug) {
 async function validateReport(workflowSlug, filePath, parseOptions = {}, workflowContext = {}) {
   const workflow = await resolveWorkflow(workflowSlug);
   const options = getParseOptions(workflowSlug, parseOptions);
-  const parsed = await parseExcelFile(filePath, options);
+  const parsed = await loadParsed(workflow, filePath, options);
   const metricColumnName = resolveMetricColumn(parsed, workflowContext);
   const validation = workflow.validator.validateStructure(
     parsed.headers,
@@ -151,7 +168,7 @@ async function processReport(workflowSlug, filePath, reportId, parseOptions = {}
     ...parseOptions,
     metricColumnName: workflowContext.metricColumnName || parseOptions.metricColumnName,
   });
-  const parsed = await parseExcelFile(filePath, options);
+  const parsed = await loadParsed(workflow, filePath, options);
   const metricColumnName = resolveMetricColumn(parsed, workflowContext);
   const validation = workflow.validator.validateStructure(
     parsed.headers,

@@ -1,6 +1,7 @@
 const trafficVolume = require('./traffic-volume');
 const telecomMetric = require('./telecom-metric');
 const cmgDataThroughput = require('./cmg-data-throughput');
+const peakAttachedUsers = require('./peak-attached-users');
 
 /**
  * Code workflows. These stay exactly as they were: hand-written modules, resolved
@@ -10,6 +11,7 @@ const WORKFLOW_REGISTRY = {
   [trafficVolume.slug]: trafficVolume,
   [telecomMetric.slug]: telecomMetric,
   [cmgDataThroughput.slug]: cmgDataThroughput,
+  [peakAttachedUsers.slug]: peakAttachedUsers,
 };
 
 /**

@@ -5,6 +5,7 @@ import {
   Check,
   Gauge,
   LineChart,
+  Users,
   Zap,
   ArrowRight,
 } from 'lucide-react';
@@ -25,6 +26,11 @@ const WORKFLOW_STYLES = {
     icon: Zap,
     category: 'Throughput',
     tagline: 'MDC1 and MDC2 Gbps capacity',
+  },
+  'peak-attached-users': {
+    icon: Users,
+    category: 'Subscribers',
+    tagline: '2G/3G/4G attached users, VLR and BHCA',
   },
   'telecom-metric': {
     icon: Gauge,

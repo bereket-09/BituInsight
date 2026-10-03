@@ -212,6 +212,7 @@ function makeFormatter(unit) {
     if (value == null || !Number.isFinite(Number(value))) return '—';
     const n = Number(value);
     const abs = Math.abs(n);
+    if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M${unit ? ` ${unit}` : ''}`;
     const text = n.toLocaleString('en-US', { maximumFractionDigits: abs >= 10 ? 0 : abs >= 1 ? 1 : 2 });
     return unit ? `${text} ${unit}` : text;
   };
