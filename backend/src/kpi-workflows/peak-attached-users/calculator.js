@@ -94,6 +94,53 @@ function buildHourProfile(hourly) {
     }));
 }
 
+/**
+ * One row per node with every measure side by side, for the per-node grid.
+ * A CMM's total is its own 2G + 3G + 4G per hour, so its peak is the busiest
+ * hour of that sum — not the sum of three peaks that may fall in different hours.
+ */
+function buildNodeMatrix(records) {
+  const cmm = new Map();
+  const msc = new Map();
+  const statOf = (values, decimals = 0) =>
+    values.length ? { peak: round(Math.max(...values), decimals), avg: round(mean(values), decimals) } : null;
+
+  for (const r of records) {
+    const isAttach = r.measure.startsWith('users');
+    const map = isAttach ? cmm : msc;
+    if (!map.has(r.node)) map.set(r.node, { node: r.node, site: r.site, values: {}, hourTotals: new Map() });
+    const row = map.get(r.node);
+    (row.values[r.measure] ||= []).push(r.value);
+    if (isAttach) {
+      const hour = r.date.getTime();
+      row.hourTotals.set(hour, (row.hourTotals.get(hour) || 0) + r.value);
+    }
+  }
+
+  const bySite = (a, b) => String(a.site).localeCompare(String(b.site)) || a.node.localeCompare(b.node);
+  const cmmRows = [...cmm.values()].sort(bySite).map((row) => ({
+    node: row.node,
+    site: row.site,
+    users4g: statOf(row.values.users4g || []),
+    users3g: statOf(row.values.users3g || []),
+    users2g: statOf(row.values.users2g || []),
+    total: statOf([...row.hourTotals.values()]),
+  }));
+  const allAvg = cmmRows.reduce((sum, r) => sum + (r.total?.avg || 0), 0);
+  cmmRows.forEach((r) => {
+    r.sharePct = allAvg > 0 ? round(((r.total?.avg || 0) / allAvg) * 100, 1) : 0;
+  });
+
+  const mscRows = [...msc.values()].sort(bySite).map((row) => ({
+    node: row.node,
+    site: row.site,
+    vlr: statOf(row.values.vlr || []),
+    bhca: statOf(row.values.bhca || [], 1),
+  }));
+
+  return { cmm: cmmRows, msc: mscRows };
+}
+
 function calculate(transformed) {
   const { records, measuresFound, cmmNodes = [], mscNodes = [] } = transformed;
   const timeSeries = buildAttachTimeSeries(records);
@@ -150,6 +197,7 @@ function calculate(transformed) {
     dailyStats,
     hourProfile: buildHourProfile(hourly),
     nodeStats: buildNodeStats(records),
+    nodeMatrix: buildNodeMatrix(records),
     nodeSplit: [
       { label: 'MDC1', percentage: share('mdc1') },
       { label: 'MDC2', percentage: share('mdc2') },

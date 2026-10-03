@@ -417,23 +417,56 @@ function tableSlide(ctx, table, rows, part, parts) {
     table.subtitle
   );
   const align = table.align || [];
-  const body = [
-    table.columns.map((c, i) => ({ ...kit.makeHeaderCell(T, c), options: { ...kit.makeHeaderCell(T, c).options, align: align[i] || 'center' } })),
-    ...rows.map((r, ri) =>
-      r.map((cell, ci) =>
-        kit.makeCell(T, cell, {
-          align: align[ci] || 'left',
-          fill: { color: ri % 2 ? T.rowOdd : T.rowEven },
-          fontSize: 9,
-          bold: ci === 0,
+  const header = table.headerRows
+    ? table.headerRows.map((row) =>
+        row.map((c) => {
+          const cell = kit.makeHeaderCell(T, c.text);
+          cell.options = { ...cell.options, colspan: c.colspan, rowspan: c.rowspan };
+          return cell;
         })
       )
-    ),
+    : [
+        table.columns.map((c, i) => {
+          const cell = kit.makeHeaderCell(T, c);
+          cell.options = { ...cell.options, align: align[i] || 'center' };
+          return cell;
+        }),
+      ];
+  const body = [
+    ...header,
+    ...rows.map((r, ri) => {
+      // A row may start after a merged cell from the row above, so alignment is
+      // read from the right-hand end, where columns always line up.
+      const offset = (table.align?.length || r.length) - r.reduce((n, c) => n + (c?.colspan || 1), 0);
+      let col = offset;
+      return r.map((raw, ci) => {
+        const c = raw && typeof raw === 'object' ? raw : { text: raw };
+        const options = {
+          align: align[col] || 'left',
+          fill: { color: c.total ? T.statusOkBg : ri % 2 ? T.rowOdd : T.rowEven },
+          fontSize: 9,
+          bold: c.bold ?? (!table.headerRows && ci === 0),
+          valign: 'middle',
+          ...(c.colspan ? { colspan: c.colspan } : {}),
+          ...(c.rowspan ? { rowspan: c.rowspan } : {}),
+          ...(c.total ? { color: T.statusOkText } : {}),
+        };
+        col += c.colspan || 1;
+        return kit.makeCell(T, c.text, options);
+      });
+    }),
   ];
+  let colW;
+  if (table.colW?.fixed && table.align) {
+    const fixed = table.colW.fixed;
+    const rest = (CONTENT_W - fixed.reduce((a, b) => a + b, 0)) / (table.align.length - fixed.length);
+    colW = [...fixed, ...Array(table.align.length - fixed.length).fill(rest)];
+  }
   slide.addTable(body, {
     x: MARGIN,
     y: 1.4,
     w: CONTENT_W,
+    ...(colW ? { colW } : {}),
     rowH: 0.36,
     border: { type: 'solid', color: T.border, pt: 0.5 },
     autoPage: false,
@@ -486,7 +519,8 @@ async function buildReportDeck({ kpi, report, workflow, T, themeId, kit }) {
   if (intelligence) plan.push((ctx) => analysisSlide(ctx));
   charts.forEach((chart, i) => plan.push((ctx) => chartSlide(ctx, chart, i, charts.length)));
   for (const table of tables) {
-    const parts = chunk(table.rows, TABLE_ROWS_PER_SLIDE);
+    // Tables with merged cells stay on one slide; splitting would break a merge.
+    const parts = table.keepTogether ? [table.rows] : chunk(table.rows, TABLE_ROWS_PER_SLIDE);
     parts.forEach((rows, i) => plan.push((ctx) => tableSlide(ctx, table, rows, i + 1, parts.length)));
   }
   if (intelligence?.forecast?.available) plan.push((ctx) => projectionSlide(ctx));
