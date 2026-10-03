@@ -7,6 +7,7 @@ const { getWorkbookById } = require('./cmmWorkbook.service');
 const { getWorkflow } = require('../kpi-workflows/registry');
 const { generateChart } = require('./chart.service');
 const { resolveThreshold } = require('../kpi-workflows/telecom-metric/constants');
+const { buildReportDeck } = require('./reportDeck.service');
 
 const LAYOUT = {
   footerY: 6.72,
@@ -1073,6 +1074,25 @@ async function generateReportPptx(reportId, userId, options = {}) {
 
   const { kpi, report } = fetched;
 
+  // Success-rate KPIs keep the target-based deck. Everything else (headcounts,
+  // throughput, volume) has no target, so it gets the detailed report deck.
+  if (kpi.workflowSlug && kpi.workflowSlug !== 'telecom-metric') {
+    let workflow = null;
+    try {
+      workflow = getWorkflow(kpi.workflowSlug);
+    } catch {
+      workflow = null;
+    }
+    return buildReportDeck({
+      kpi,
+      report,
+      workflow,
+      T,
+      themeId,
+      kit: deckKit(),
+    });
+  }
+
   const deckDefaultThreshold = clampThreshold(
     defaultThreshold != null ? defaultThreshold : 99
   );
@@ -1093,4 +1113,9 @@ async function generateReportPptx(reportId, userId, options = {}) {
   return buildDeck(workbookLike, [kpi], deckDefaultThreshold, themeId, T);
 }
 
-module.exports = { generateWorkbookPptx, generateReportPptx, createTheme };
+/** Slide chrome shared with the report deck, so both decks look like one product. */
+function deckKit() {
+  return { addSlideAccentBar, addBrandFooter, addClosingSlide, makeCell, makeHeaderCell };
+}
+
+module.exports = { generateWorkbookPptx, generateReportPptx, createTheme, deckKit };

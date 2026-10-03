@@ -73,6 +73,27 @@ function buildNodeStats(records) {
     .sort((a, b) => ORDER.indexOf(a.measure) - ORDER.indexOf(b.measure) || a.node.localeCompare(b.node));
 }
 
+/** The shape of a typical day: the average of each hour of day across the report. */
+function buildHourProfile(hourly) {
+  const byHour = new Map();
+  for (const p of hourly) {
+    const hour = new Date(p.timestamp).getHours();
+    if (!byHour.has(hour)) byHour.set(hour, []);
+    byHour.get(hour).push(p);
+  }
+  return [...byHour.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([hour, points]) => ({
+      hour,
+      label: `${String(hour).padStart(2, '0')}:00`,
+      avgTotal: round(mean(points.map((p) => p.total))),
+      avg4g: round(mean(points.map((p) => p.users4g))),
+      avg3g: round(mean(points.map((p) => p.users3g))),
+      avg2g: round(mean(points.map((p) => p.users2g))),
+      avgBhca: round(mean(points.map((p) => p.bhca)), 1),
+    }));
+}
+
 function calculate(transformed) {
   const { records, measuresFound, cmmNodes = [], mscNodes = [] } = transformed;
   const timeSeries = buildAttachTimeSeries(records);
@@ -127,6 +148,7 @@ function calculate(transformed) {
     },
     timeSeries,
     dailyStats,
+    hourProfile: buildHourProfile(hourly),
     nodeStats: buildNodeStats(records),
     nodeSplit: [
       { label: 'MDC1', percentage: share('mdc1') },

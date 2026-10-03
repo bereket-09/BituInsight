@@ -244,6 +244,7 @@ function buildChartJsConfig(chartConfig) {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: {
+          stacked: isStacked,
           ticks: {
             color: DARK_THEME.muted,
             font: fontSpec(11),
@@ -258,7 +259,7 @@ function buildChartJsConfig(chartConfig) {
         y: {
           stacked: isStacked,
           // Stacked areas only read true from zero; a cropped axis shrinks the bottom layer.
-          beginAtZero: isStacked,
+          beginAtZero: isStacked || chartType === 'bar',
           min: isPercent ? 0 : undefined,
           max: isPercent ? 100 : undefined,
           ticks: {

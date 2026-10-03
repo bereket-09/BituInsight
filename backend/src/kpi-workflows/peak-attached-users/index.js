@@ -4,6 +4,7 @@ const calculator = require('./calculator');
 const charts = require('./charts');
 const formatter = require('./formatter');
 const { loadSource } = require('./source');
+const { exportTables } = require('./exportTables');
 
 /** A Peak Attach Users export: any "Data for PEAK_ATTACH_…" sheet. */
 function matchesWorkbook(sheetNames) {
@@ -29,6 +30,8 @@ module.exports = {
   loadSource,
   // Lets the upload page send this export here instead of to CMM workbook mode.
   matchesWorkbook,
+  // Extra tables for the PowerPoint export.
+  exportTables,
   validator,
   transformer,
   calculator,
