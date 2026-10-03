@@ -185,27 +185,15 @@ function generateSummary(calculated, transformed) {
     insight,
     highlights: [
       { label: 'Time span', value: det.spanLabel || '—', trend: 'neutral' },
-      { label: 'Periods', value: String(metrics.periodCount), trend: 'neutral' },
-      { label: 'Raw rows', value: String(metrics.rawRowCount), trend: 'neutral' },
-      {
-        label: 'Total throughput',
-        value: formatThroughputGbps(metrics.totalThroughputGbps),
-        trend: 'neutral',
-      },
-      {
-        label: 'MDC1 total',
-        value: formatThroughputGbps(metrics.totalMdc1Gbps),
-        trend: 'neutral',
-      },
-      {
-        label: 'MDC2 total',
-        value: formatThroughputGbps(metrics.totalMdc2Gbps),
-        trend: 'neutral',
-      },
       {
         label: 'MDC1 share',
         value: `${metrics.mdc1SharePct}%`,
         trend: metrics.mdc1SharePct >= 50 ? 'up' : 'down',
+      },
+      {
+        label: 'MDC2 share',
+        value: `${metrics.mdc2SharePct}%`,
+        trend: metrics.mdc2SharePct >= 50 ? 'up' : 'down',
       },
       { label: 'Latest period', value: metrics.latestPeriod, trend: 'neutral' },
       {
