@@ -28,18 +28,19 @@ const NARRATIVE_SCHEMA = {
     summary: {
       type: 'string',
       description:
-        'One or two short sentences in plain words. Say what happened and whether it needs attention.',
+        'Two to four sentences an operations manager can read without opening the charts. Lead with what happened, then why it matters.',
     },
     keyPoints: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Up to three very short bullets in plain words, at most one number each.',
+      description:
+        'Three to five bullets. Each gives a number together with what it is compared to and why it matters.',
     },
     recommendations: {
       type: 'array',
       items: { type: 'string' },
       description:
-        'Zero to two short, simple next actions. Return an empty array when nothing needs doing.',
+        'Zero to four concrete next actions, each saying what to check and why. Return an empty array when nothing needs doing.',
     },
     riskLevel: {
       type: 'string',
@@ -61,12 +62,16 @@ Ground every claim in the brief. Never introduce a number that is not present in
 
 When the analysis found nothing of concern, say that plainly and return an empty recommendations array. A quiet period is a valid, useful result; do not manufacture concerns to fill space.
 
-Keep it short and easy to read. Write for someone who is not a data analyst:
-- Use everyday words. Say "went up", "dropped", "higher than normal", "close to the limit".
-- Never use statistics terms or show calculations: no σ, sigma, r², standard deviation, percentile, regression, confidence interval, slope, z-score or baseline.
-- Do not talk about forecasts or projections.
-- At most one number per sentence, and round it.
-- Complete sentences, no arrow chains, no invented severity language.`;
+Make every number understandable on its own. Whenever you give a number, say what it is compared to and why it matters:
+- Not "-60% overall" but "fell from about 210 Gbps at the start to about 84 Gbps by the end of the 14 days (-60%)".
+- Not "3.2x" but "the busiest periods reach about 3 times the usual level".
+- Not "spike at 08:00" but "at 08:00 it reached 600 Gbps, against about 174 Gbps normally seen at that hour".
+
+Use plain words a non-analyst understands. Do not use statistics jargon (σ, sigma, r², z-score, MAD, regression, percentile, confidence interval); describe what it means instead ("well outside the usual ups and downs", "a consistent direction, not noise"). Round numbers sensibly.
+
+If the brief includes a projection, describe it as "if the current trend continues" and give the expected value with its range.
+
+Write for a reader who knows telecom but is skimming. Complete sentences, no arrow chains, no invented severity language.`;
 
 /**
  * Appended for providers whose structured output is not schema-enforced. It
@@ -188,8 +193,8 @@ function validateNarrative(parsed) {
 
   return {
     summary,
-    keyPoints: toStringList(node.keyPoints, 3),
-    recommendations: toStringList(node.recommendations, 2),
+    keyPoints: toStringList(node.keyPoints, 6),
+    recommendations: toStringList(node.recommendations, 4),
     riskLevel: RISK_LEVELS.has(risk) ? risk : 'none',
   };
 }

@@ -124,7 +124,7 @@ function analyze(series, options = {}) {
   };
 
   const findings = buildFindings(analysis, options);
-  const narrative = composeNarrative(analysis, findings);
+  const narrative = composeNarrative(analysis, findings, options);
 
   // Internal regression handles are useful during computation but shouldn't be
   // persisted into the report JSON.
@@ -135,6 +135,7 @@ function analyze(series, options = {}) {
 
   return {
     ...analysis,
+    unit: options.unit || '',
     findings,
     narrative,
     brief: toNarrativeBrief(analysis, findings, options),

@@ -196,6 +196,7 @@ async function processReport(workflowSlug, filePath, reportId, parseOptions = {}
   if (intelligence) {
     summary.intelligence = {
       available: intelligence.available,
+      unit: intelligence.unit,
       scope: intelligence.scope,
       findings: intelligence.findings,
       narrative: intelligence.narrative,

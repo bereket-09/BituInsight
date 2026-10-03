@@ -57,9 +57,18 @@ function analyzeTrend(points, cadence) {
     direction = slopePerDay > 0 ? 'rising' : 'falling';
   }
 
+  // Where the fitted line starts and ends, so a reader can be told "from about X
+  // to about Y" instead of a bare percentage with no reference point.
+  const startLevel = fit.intercept;
+  const endLevel = fit.intercept + fit.slope * (values.length - 1);
+  const changeFromStartPct = startLevel > 0 ? ((endLevel - startLevel) / startLevel) * 100 : null;
+
   return {
     available: true,
     basis: useDaily ? 'daily medians' : 'native cadence',
+    startLevel: round(Math.max(0, startLevel)),
+    endLevel: round(Math.max(0, endLevel)),
+    changeFromStartPct: changeFromStartPct == null ? null : round(changeFromStartPct, 1),
     pointsFitted: values.length,
     spanDays: round(spanDays, 1),
     slopePerDay: round(slopePerDay, 3),
