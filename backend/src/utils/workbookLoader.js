@@ -4,6 +4,36 @@ const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 
 /**
+ * Escape double quotes inside hyperlink `location` attributes.
+ *
+ * A sheet whose name contains a double quote — "Data for Gb MO PDP act "tech" S"
+ * in one PS KPI export — produces a hyperlink whose `display` attribute is
+ * escaped correctly while `location` is not:
+ *
+ *   location="'Data for Gb MO PDP act "tech" S'!D1:D1"
+ *
+ * The value ends at the first inner quote, so everything after it parses as a
+ * stray attribute and the whole sheet fails to load. Excel is lenient about it;
+ * a conforming XML parser is not.
+ *
+ * A hyperlink element never contains '>', so matching to the element's own end
+ * is safe even while its attributes are malformed.
+ */
+function escapeHyperlinkLocations(xml) {
+  if (!xml.includes('<hyperlink')) return xml;
+
+  return xml.replace(/<hyperlink\b[^>]*?\/>/g, (element) =>
+    // Greedy up to the last quote that is followed by another attribute or the
+    // element's end, so the inner quotes stay inside the captured value.
+    element.replace(
+      /location="(.*)"(?=\s+[A-Za-z_:][-A-Za-z0-9_:.]*=|\s*\/>)/,
+      (match, value) =>
+        value.includes('"') ? `location="${value.split('"').join('&quot;')}"` : match
+    )
+  );
+}
+
+/**
  * Load an .xlsx into ExcelJS, tolerating package relationships written as
  * absolute part names.
  *
@@ -22,6 +52,16 @@ async function normalizeRelationshipTargets(buffer) {
   const zip = await JSZip.loadAsync(buffer);
   const relsFiles = Object.keys(zip.files).filter((name) => name.endsWith('.rels'));
   let changed = false;
+
+  // Worksheet XML repairs, in the same pass so the package is rewritten once.
+  for (const sheetPath of Object.keys(zip.files).filter((n) => /^xl\/worksheets\/.*\.xml$/.test(n))) {
+    const xml = await zip.file(sheetPath).async('string');
+    const repaired = escapeHyperlinkLocations(xml);
+    if (repaired !== xml) {
+      zip.file(sheetPath, repaired);
+      changed = true;
+    }
+  }
 
   for (const relsPath of relsFiles) {
     const xml = await zip.file(relsPath).async('string');
@@ -56,4 +96,4 @@ async function loadWorkbook(filePath) {
   return workbook;
 }
 
-module.exports = { loadWorkbook, normalizeRelationshipTargets };
+module.exports = { loadWorkbook, normalizeRelationshipTargets, escapeHyperlinkLocations };
