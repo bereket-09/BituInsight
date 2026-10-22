@@ -69,6 +69,10 @@ CREATE INDEX idx_processed_reports_user ON processed_reports(user_id);
 CREATE INDEX idx_processed_reports_status ON processed_reports(status);
 CREATE INDEX idx_processed_reports_workflow ON processed_reports(workflow_id);
 CREATE INDEX idx_processed_reports_created ON processed_reports(created_at DESC);
+CREATE INDEX idx_processed_reports_user_created ON processed_reports(user_id, created_at DESC);
+CREATE INDEX idx_processed_reports_user_standalone ON processed_reports(user_id, created_at DESC) WHERE workbook_id IS NULL;
+CREATE INDEX idx_processed_reports_user_status ON processed_reports(user_id, status);
+CREATE INDEX idx_processed_reports_user_workflow ON processed_reports(user_id, workflow_id);
 
 -- CMM multi-sheet workbook uploads
 CREATE TABLE workbook_uploads (
@@ -86,12 +90,15 @@ CREATE TABLE workbook_uploads (
 );
 
 CREATE INDEX idx_workbook_uploads_user ON workbook_uploads(user_id);
+CREATE INDEX idx_workbook_uploads_user_created ON workbook_uploads(user_id, created_at DESC);
+CREATE INDEX idx_workbook_uploads_user_status ON workbook_uploads(user_id, status);
 
 ALTER TABLE processed_reports
     ADD CONSTRAINT fk_processed_reports_workbook
     FOREIGN KEY (workbook_id) REFERENCES workbook_uploads(id) ON DELETE CASCADE;
 
 CREATE INDEX idx_processed_reports_workbook ON processed_reports(workbook_id);
+CREATE INDEX idx_processed_reports_workbook_user ON processed_reports(workbook_id, user_id) WHERE workbook_id IS NOT NULL;
 
 -- Generated metrics per report
 CREATE TABLE generated_metrics (

@@ -442,23 +442,25 @@ async function processWorkbookAsync(workbookId, userId, filePath, fileInfo, thre
 }
 
 async function getWorkbookById(workbookId, userId) {
-  const wbResult = await pool.query(
-    `SELECT * FROM workbook_uploads WHERE id = $1 AND user_id = $2`,
-    [workbookId, userId]
-  );
+  const [wbResult, reportsResult] = await Promise.all([
+    pool.query(
+      `SELECT * FROM workbook_uploads WHERE id = $1 AND user_id = $2`,
+      [workbookId, userId]
+    ),
+    pool.query(
+      `SELECT pr.id, pr.status, pr.sheet_name, pr.kpi_name, pr.summary, pr.error_message,
+              pr.validation_errors, pr.created_at, pr.completed_at,
+              kw.slug as workflow_slug
+       FROM processed_reports pr
+       JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+       WHERE pr.workbook_id = $1 AND pr.user_id = $2
+       ORDER BY pr.sheet_name`,
+      [workbookId, userId]
+    ),
+  ]);
   if (wbResult.rows.length === 0) return null;
 
   const workbook = wbResult.rows[0];
-  const reportsResult = await pool.query(
-    `SELECT pr.id, pr.status, pr.sheet_name, pr.kpi_name, pr.summary, pr.error_message,
-            pr.validation_errors, pr.created_at, pr.completed_at,
-            kw.slug as workflow_slug
-     FROM processed_reports pr
-     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
-     WHERE pr.workbook_id = $1 AND pr.user_id = $2
-     ORDER BY pr.sheet_name`,
-    [workbookId, userId]
-  );
 
   const summary = workbook.summary || {};
   const preview = summary.preview || {};

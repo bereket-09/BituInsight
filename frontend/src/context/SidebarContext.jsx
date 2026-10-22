@@ -1,10 +1,19 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const COLLAPSED_KEY = 'coreinsight_sidebar_collapsed';
+const LAYOUT_MODE_KEY = 'coreinsight_layout_mode';
 
 const SidebarContext = createContext(null);
 
 export function SidebarProvider({ children }) {
+  const [layoutMode, setLayoutModeState] = useState(() => {
+    try {
+      return localStorage.getItem(LAYOUT_MODE_KEY) || 'top';
+    } catch {
+      return 'top';
+    }
+  });
+
   const [collapsed, setCollapsedState] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSED_KEY) === 'true';
@@ -12,7 +21,9 @@ export function SidebarProvider({ children }) {
       return false;
     }
   });
+
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -21,6 +32,22 @@ export function SidebarProvider({ children }) {
       /* ignore */
     }
   }, [collapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAYOUT_MODE_KEY, layoutMode);
+    } catch {
+      /* ignore */
+    }
+  }, [layoutMode]);
+
+  const setLayoutMode = useCallback((mode) => {
+    setLayoutModeState(mode);
+  }, []);
+
+  const toggleLayoutMode = useCallback(() => {
+    setLayoutModeState((current) => (current === 'top' ? 'side' : 'top'));
+  }, []);
 
   const setCollapsed = useCallback((value) => {
     setCollapsedState(value);
@@ -35,9 +62,16 @@ export function SidebarProvider({ children }) {
   const openMobile = useCallback(() => setMobileOpen(true), []);
   const toggleMobile = useCallback(() => setMobileOpen((o) => !o), []);
 
+  const openAiCopilot = useCallback(() => setAiCopilotOpen(true), []);
+  const closeAiCopilot = useCallback(() => setAiCopilotOpen(false), []);
+  const toggleAiCopilot = useCallback(() => setAiCopilotOpen((o) => !o), []);
+
   return (
     <SidebarContext.Provider
       value={{
+        layoutMode,
+        setLayoutMode,
+        toggleLayoutMode,
         collapsed,
         setCollapsed,
         toggleCollapsed,
@@ -46,6 +80,11 @@ export function SidebarProvider({ children }) {
         closeMobile,
         openMobile,
         toggleMobile,
+        aiCopilotOpen,
+        setAiCopilotOpen,
+        openAiCopilot,
+        closeAiCopilot,
+        toggleAiCopilot,
       }}
     >
       {children}

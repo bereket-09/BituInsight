@@ -189,23 +189,23 @@ async function getReportById(reportId, userId) {
 
   const report = result.rows[0];
 
-  const metricsResult = await pool.query(
-    'SELECT * FROM generated_metrics WHERE report_id = $1 ORDER BY metric_key',
-    [reportId]
-  );
-
-  // Explicit column list: image_data holds the PNG bytes, and selecting it here
-  // would ship a few hundred KB of binary to the browser on every report view.
-  const chartsResult = await pool.query(
-    `SELECT id, report_id, chart_type, title, file_path, config, image_bytes, created_at
-     FROM generated_charts WHERE report_id = $1 ORDER BY created_at`,
-    [reportId]
-  );
-
-  const teamsResult = await pool.query(
-    'SELECT * FROM teams_delivery_logs WHERE report_id = $1 ORDER BY created_at DESC LIMIT 5',
-    [reportId]
-  );
+  const [metricsResult, chartsResult, teamsResult] = await Promise.all([
+    pool.query(
+      'SELECT * FROM generated_metrics WHERE report_id = $1 ORDER BY metric_key',
+      [reportId]
+    ),
+    // Explicit column list: image_data holds the PNG bytes, and selecting it here
+    // would ship a few hundred KB of binary to the browser on every report view.
+    pool.query(
+      `SELECT id, report_id, chart_type, title, file_path, config, image_bytes, created_at
+       FROM generated_charts WHERE report_id = $1 ORDER BY created_at`,
+      [reportId]
+    ),
+    pool.query(
+      'SELECT * FROM teams_delivery_logs WHERE report_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [reportId]
+    ),
+  ]);
 
   return {
     ...report,
@@ -231,26 +231,30 @@ async function listReports(userId, { page = 1, limit = 20, status, workflowSlug 
   }
 
   const where = conditions.join(' AND ');
-  values.push(limit, offset);
+  const pageValues = [...values, limit, offset];
+  const countValues = [...values];
 
-  const result = await pool.query(
-    `SELECT pr.*, kw.slug as workflow_slug, kw.name as workflow_name,
-            uf.original_filename
-     FROM processed_reports pr
-     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
-     LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
-     WHERE ${where}
-     ORDER BY pr.created_at DESC
-     LIMIT $${idx++} OFFSET $${idx}`,
-    values
-  );
-
-  const countResult = await pool.query(
-    `SELECT COUNT(*) FROM processed_reports pr
-     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
-     WHERE ${where}`,
-    values.slice(0, -2)
-  );
+  const [result, countResult] = await Promise.all([
+    pool.query(
+      `SELECT pr.id, pr.user_id, pr.workflow_id, pr.uploaded_file_id, pr.status, pr.validation_errors,
+              pr.summary, pr.error_message, pr.created_at, pr.completed_at,
+              kw.slug as workflow_slug, kw.name as workflow_name,
+              uf.original_filename
+       FROM processed_reports pr
+       JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+       LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
+       WHERE ${where}
+       ORDER BY pr.created_at DESC
+       LIMIT $${idx++} OFFSET $${idx}`,
+      pageValues
+    ),
+    pool.query(
+      `SELECT COUNT(*) FROM processed_reports pr
+       JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+       WHERE ${where}`,
+      countValues
+    ),
+  ]);
 
   return {
     reports: result.rows,
@@ -302,64 +306,68 @@ async function sendReportToTeams(reportId, userId, webhookUrl) {
 }
 
 async function getDashboardStats(userId) {
-  const stats = await pool.query(
-    `SELECT
-       COUNT(*) FILTER (WHERE status = 'completed') as completed,
-       COUNT(*) FILTER (WHERE status = 'failed') as failed,
-       COUNT(*) FILTER (WHERE status IN ('pending','validating','processing')) as in_progress,
-       COUNT(*) as total
-     FROM processed_reports WHERE user_id = $1`,
-    [userId]
-  );
-
-  const workbookStats = await pool.query(
-    `SELECT
-       COUNT(*) as total,
-       COUNT(*) FILTER (WHERE status = 'completed') as completed,
-       COUNT(*) FILTER (WHERE status = 'failed') as failed,
-       COUNT(*) FILTER (WHERE status IN ('pending','processing')) as in_progress
-     FROM workbook_uploads WHERE user_id = $1`,
-    [userId]
-  );
-
-  const kpiInWorkbooks = await pool.query(
-    `SELECT COUNT(*)::int as count
-     FROM processed_reports WHERE user_id = $1 AND workbook_id IS NOT NULL`,
-    [userId]
-  );
-
-  const recent = await pool.query(
-    `SELECT pr.id, pr.status, pr.created_at, uf.original_filename, pr.workbook_id,
-            pr.kpi_name, kw.name as workflow_name, kw.slug as workflow_slug
-     FROM processed_reports pr
-     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
-     LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
-     WHERE pr.user_id = $1 AND pr.workbook_id IS NULL
-     ORDER BY pr.created_at DESC LIMIT 5`,
-    [userId]
-  );
-
-  const recentWorkbooks = await pool.query(
-    `SELECT wu.id, wu.original_filename, wu.status, wu.created_at,
-            COUNT(pr.id)::int as kpi_count,
-            COUNT(pr.id) FILTER (WHERE pr.status = 'completed')::int as completed_kpis
-     FROM workbook_uploads wu
-     LEFT JOIN processed_reports pr ON pr.workbook_id = wu.id
-     WHERE wu.user_id = $1
-     GROUP BY wu.id
-     ORDER BY wu.created_at DESC LIMIT 5`,
-    [userId]
-  );
-
-  const workflowUsage = await pool.query(
-    `SELECT kw.slug, kw.name, COUNT(pr.id) as count
-     FROM processed_reports pr
-     JOIN kpi_workflows kw ON pr.workflow_id = kw.id
-     WHERE pr.user_id = $1
-     GROUP BY kw.slug, kw.name
-     ORDER BY count DESC`,
-    [userId]
-  );
+  const [
+    stats,
+    workbookStats,
+    kpiInWorkbooks,
+    recent,
+    recentWorkbooks,
+    workflowUsage,
+  ] = await Promise.all([
+    pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'completed') as completed,
+         COUNT(*) FILTER (WHERE status = 'failed') as failed,
+         COUNT(*) FILTER (WHERE status IN ('pending','validating','processing')) as in_progress,
+         COUNT(*) as total
+       FROM processed_reports WHERE user_id = $1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT
+         COUNT(*) as total,
+         COUNT(*) FILTER (WHERE status = 'completed') as completed,
+         COUNT(*) FILTER (WHERE status = 'failed') as failed,
+         COUNT(*) FILTER (WHERE status IN ('pending','processing')) as in_progress
+       FROM workbook_uploads WHERE user_id = $1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int as count
+       FROM processed_reports WHERE user_id = $1 AND workbook_id IS NOT NULL`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT pr.id, pr.status, pr.created_at, uf.original_filename, pr.workbook_id,
+              pr.kpi_name, kw.name as workflow_name, kw.slug as workflow_slug
+       FROM processed_reports pr
+       JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+       LEFT JOIN uploaded_files uf ON pr.uploaded_file_id = uf.id
+       WHERE pr.user_id = $1 AND pr.workbook_id IS NULL
+       ORDER BY pr.created_at DESC LIMIT 5`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT wu.id, wu.original_filename, wu.status, wu.created_at,
+              COUNT(pr.id)::int as kpi_count,
+              COUNT(pr.id) FILTER (WHERE pr.status = 'completed')::int as completed_kpis
+       FROM workbook_uploads wu
+       LEFT JOIN processed_reports pr ON pr.workbook_id = wu.id
+       WHERE wu.user_id = $1
+       GROUP BY wu.id
+       ORDER BY wu.created_at DESC LIMIT 5`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT kw.slug, kw.name, COUNT(pr.id) as count
+       FROM processed_reports pr
+       JOIN kpi_workflows kw ON pr.workflow_id = kw.id
+       WHERE pr.user_id = $1
+       GROUP BY kw.slug, kw.name
+       ORDER BY count DESC`,
+      [userId]
+    ),
+  ]);
 
   return {
     stats: stats.rows[0],

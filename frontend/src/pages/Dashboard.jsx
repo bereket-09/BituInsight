@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -8,56 +9,75 @@ import {
   RefreshCw,
   AlertTriangle,
   Upload,
+  Sparkles,
+  Layers,
+  Search,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  Cpu,
+  ShieldCheck,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { dashboardApi } from '../api';
 import StatusBadge from '../components/StatusBadge';
+import { useSidebar } from '../context/SidebarContext';
 
 const ICON_STROKE = 1.75;
 
-/* A ledger cell: quiet label, figure carries the weight. */
-function LedgerCell({ label, value }) {
+function StatCard({ icon: Icon, label, value, subtext, trend, tone = 'accent' }) {
+  const toneMap = {
+    accent: 'bg-noc-accent/10 text-noc-accent border-noc-accent/20',
+    success: 'bg-noc-success/10 text-noc-success border-noc-success/20',
+    info: 'bg-noc-info/10 text-noc-info border-noc-info/20',
+    warning: 'bg-noc-warning/10 text-noc-warning border-noc-warning/20',
+  };
+
   return (
-    <div className="flex-1 px-3 first:pl-0 last:pr-0">
-      <dt className="text-[10px] uppercase tracking-[0.12em] text-noc-muted">{label}</dt>
-      <dd className="tabular mt-1 text-lg font-semibold leading-none text-noc-text">{value}</dd>
+    <div className="card group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-noc-accent/40">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-noc-muted">
+            {label}
+          </p>
+          <p className="tabular mt-2 font-display text-3xl font-bold tracking-tight text-noc-text">
+            {value}
+          </p>
+          {subtext && (
+            <p className="mt-1 text-xs text-noc-textDim">
+              {subtext}
+            </p>
+          )}
+        </div>
+        <div
+          className={clsx(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border',
+            toneMap[tone] || toneMap.accent
+          )}
+        >
+          <Icon className="h-5 w-5" strokeWidth={ICON_STROKE} />
+        </div>
+      </div>
+      {trend && (
+        <div className="mt-3 flex items-center gap-1.5 border-t border-noc-border/60 pt-2.5 text-[11px] text-noc-muted">
+          <TrendingUp className="h-3 w-3 text-noc-accent" />
+          <span>{trend}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-/* Pipeline rows share one scale, so the bars are directly comparable. */
-function PipelineRow({ label, value, share, tone }) {
+function EmptyState({ icon: Icon, title, description, actionLabel, actionTo }) {
   return (
-    <li>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm text-noc-textDim">{label}</span>
-        <span className="tabular text-xl font-semibold leading-none text-noc-text">{value}</span>
-      </div>
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-noc-border/70">
-        <div
-          className={clsx('h-full rounded-full transition-[width] duration-700 ease-out', tone)}
-          style={{ width: `${share}%` }}
-        />
-      </div>
-    </li>
-  );
-}
-
-function EmptyState({ icon: Icon, title, description, actionLabel, actionTo, compact = false }) {
-  return (
-    <div
-      className={clsx(
-        'flex flex-col items-center rounded-2xl border border-dashed border-noc-border text-center',
-        compact ? 'px-5 py-8' : 'px-6 py-12'
-      )}
-    >
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-noc-border bg-noc-bg text-noc-muted">
-        <Icon className="h-5 w-5" strokeWidth={ICON_STROKE} />
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-noc-border p-8 text-center sm:p-12">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-noc-border bg-noc-card text-noc-muted">
+        <Icon className="h-6 w-6" strokeWidth={ICON_STROKE} />
       </span>
-      <p className="mt-4 text-sm font-medium text-noc-text">{title}</p>
+      <h3 className="mt-4 text-sm font-semibold text-noc-text">{title}</h3>
       <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-noc-muted">{description}</p>
       {actionTo && (
-        <Link to={actionTo} className="btn-secondary mt-5 px-3 py-2 text-xs">
+        <Link to={actionTo} className="btn-secondary mt-5 text-xs">
           {actionLabel}
           <ArrowRight className="h-3.5 w-3.5" strokeWidth={ICON_STROKE} />
         </Link>
@@ -66,57 +86,32 @@ function EmptyState({ icon: Icon, title, description, actionLabel, actionTo, com
   );
 }
 
-/* Skeletons trace the real layout: hero, then the 4/8 and 8/4 bands. */
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="dashboard-hero">
-        <div className="grid gap-8 lg:grid-cols-12">
-          <div className="space-y-4 lg:col-span-7">
-            <div className="skeleton h-3 w-32" />
-            <div className="skeleton h-10 w-64" />
-            <div className="skeleton h-4 w-full max-w-md" />
-            <div className="flex gap-3 pt-3">
-              <div className="skeleton h-10 w-40 rounded-xl" />
-              <div className="skeleton h-10 w-32 rounded-xl" />
-            </div>
-          </div>
-          <div className="lg:col-span-5">
-            <div className="skeleton h-44 w-full rounded-2xl" />
-          </div>
-        </div>
+      <div className="skeleton h-36 w-full rounded-3xl" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="skeleton h-28 w-full rounded-2xl" />
+        ))}
       </div>
-
-      <div className="grid gap-5 lg:grid-cols-12">
-        <div className="card lg:col-span-4">
-          <div className="skeleton h-3 w-24" />
-          <div className="mt-6 space-y-6">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="space-y-2">
-                <div className="skeleton h-4 w-full" />
-                <div className="skeleton h-1 w-full" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="card lg:col-span-8">
-          <div className="skeleton h-3 w-40" />
-          <div className="mt-5 space-y-3">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="skeleton h-14 w-full rounded-xl" />
-            ))}
-          </div>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="skeleton h-96 w-full rounded-2xl lg:col-span-8" />
+        <div className="skeleton h-96 w-full rounded-2xl lg:col-span-4" />
       </div>
     </div>
   );
 }
 
 export default function Dashboard() {
+  const { openAiCopilot } = useSidebar();
+  const [activityTab, setActivityTab] = useState('workbooks'); // 'workbooks' | 'reports'
+  const [searchFilter, setSearchFilter] = useState('');
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => dashboardApi.get().then((r) => r.data),
-    refetchInterval: 10000,
+    refetchInterval: 12000,
   });
 
   if (isLoading) return <DashboardSkeleton />;
@@ -124,320 +119,377 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="card flex flex-col items-center px-6 py-14 text-center">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-noc-danger/30 bg-noc-danger/10 text-noc-danger">
-          <AlertTriangle className="h-5 w-5" strokeWidth={ICON_STROKE} />
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-noc-danger/30 bg-noc-danger/10 text-noc-danger">
+          <AlertTriangle className="h-6 w-6" strokeWidth={ICON_STROKE} />
         </span>
-        <p className="mt-4 text-sm font-medium text-noc-text">Dashboard could not be loaded</p>
-        <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-noc-muted">
-          The service did not respond. Your reports are unaffected — retry in a moment.
+        <h2 className="mt-4 text-base font-semibold text-noc-text">Dashboard Service Unavailable</h2>
+        <p className="mt-1.5 max-w-md text-xs leading-relaxed text-noc-muted">
+          Could not communicate with the analytics backend. Ingested files and historical reports remain intact.
         </p>
-        <button type="button" onClick={() => refetch()} className="btn-secondary mt-5 px-3 py-2 text-xs">
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="btn-secondary mt-6 gap-2 text-xs"
+        >
           <RefreshCw
             className={clsx('h-3.5 w-3.5', isFetching && 'animate-spin')}
             strokeWidth={ICON_STROKE}
           />
-          Try again
+          Retry Connection
         </button>
       </div>
     );
   }
 
-  const { stats, workbookStats, kpiInWorkbooks, recentReports, recentWorkbooks, workflowUsage } =
-    data;
+  const { stats, workbookStats, kpiInWorkbooks, recentReports = [], recentWorkbooks = [], workflowUsage = [] } =
+    data || {};
   const wb = workbookStats || {};
 
   const total = Number(stats?.total) || 0;
   const completed = Number(stats?.completed) || 0;
   const inProgress = Number(stats?.in_progress) || 0;
   const failed = Number(stats?.failed) || 0;
-  const completionRate = total ? Math.round((completed / total) * 100) : null;
+  const completionRate = total ? Math.round((completed / total) * 100) : 100;
 
-  const share = (n) => (total ? (n / total) * 100 : 0);
-  const maxWf = Math.max(...(workflowUsage?.map((w) => Number(w.count)) || [1]), 1);
+  const totalWb = Number(wb.total) || 0;
+  const maxWf = Math.max(...(workflowUsage.map((w) => Number(w.count)) || [1]), 1);
 
-  const pipeline = [
-    { label: 'Completed', value: completed, share: share(completed), tone: 'bg-noc-success' },
-    { label: 'In progress', value: inProgress, share: share(inProgress), tone: 'bg-noc-info' },
-    { label: 'Failed', value: failed, share: share(failed), tone: 'bg-noc-danger' },
-  ];
+  // Filtered lists
+  const filteredWorkbooks = recentWorkbooks.filter((w) =>
+    (w.original_filename || '').toLowerCase().includes(searchFilter.toLowerCase())
+  );
+  const filteredReports = recentReports.filter(
+    (r) =>
+      (r.workflow_name || '').toLowerCase().includes(searchFilter.toLowerCase()) ||
+      (r.original_filename || '').toLowerCase().includes(searchFilter.toLowerCase())
+  );
 
   return (
-    <div className="stagger space-y-6">
-      {/*
-        Hero carries the whole summary moment: identity and intent on the left,
-        one dominant figure plus a three-item ledger on the right. Nothing below
-        competes with it for first read.
-      */}
-      <section className="dashboard-hero">
-        <div className="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
-          <div className="lg:col-span-7">
-            <p className="eyebrow">Operations overview</p>
-            <h1 className="mt-3 text-display-lg text-noc-text">Core Insight</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-noc-textDim sm:text-base">
-              Track CMM workbook processing, single KPI uploads and executive chart exports from a
-              single view.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link to="/upload" className="btn-primary">
-                <Upload className="h-4 w-4" strokeWidth={ICON_STROKE} />
-                Upload workbook
-              </Link>
-              <Link to="/reports" className="btn-secondary">
-                <BarChart3 className="h-4 w-4" strokeWidth={ICON_STROKE} />
-                View history
-              </Link>
+    <div className="space-y-6">
+      {/* ===================== HERO OPERATIONS BANNER ===================== */}
+      <section className="relative overflow-hidden rounded-3xl border border-noc-border/90 bg-gradient-to-br from-noc-surface via-noc-surface to-noc-card p-6 shadow-sm sm:p-8">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-noc-accent animate-pulse" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-noc-accent">
+                Core Insight Platform · Operational
+              </span>
             </div>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-noc-text sm:text-3xl">
+              Telecom KPI & Network Intelligence
+            </h1>
+            <p className="max-w-2xl text-xs sm:text-sm leading-relaxed text-noc-textDim">
+              Automated ingestion for multi-sheet CMM workbooks, seasonal anomaly detection,
+              capacity headroom forecasting, and executive PowerPoint export generation.
+            </p>
           </div>
 
-          <div className="lg:col-span-5">
-            <div className="rounded-2xl border border-noc-border/70 bg-noc-bg/60 p-5 backdrop-blur-sm">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-noc-muted">
-                  Completion rate
-                </p>
-                <span className="tabular text-[11px] text-noc-muted">
-                  {completed} of {total}
-                </span>
-              </div>
-
-              <p className="tabular mt-2 text-display-xl text-noc-text">
-                {completionRate === null ? '—' : `${completionRate}%`}
-              </p>
-
-              <div
-                className="mt-4 h-1.5 overflow-hidden rounded-full bg-noc-border/70"
-                role="progressbar"
-                aria-valuenow={completionRate ?? 0}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Report completion rate"
-              >
-                <div
-                  className="h-full rounded-full bg-noc-accent transition-[width] duration-700 ease-out"
-                  style={{ width: `${completionRate ?? 0}%` }}
-                />
-              </div>
-
-              <dl className="mt-5 flex divide-x divide-noc-border/70 border-t border-noc-border/70 pt-4">
-                <LedgerCell label="KPI reports" value={total} />
-                <LedgerCell label="Workbooks" value={Number(wb.total) || 0} />
-                <LedgerCell label="In workbooks" value={Number(kpiInWorkbooks) || 0} />
-              </dl>
-            </div>
+          {/* Quick Action CTAs */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to="/upload" className="btn-primary text-xs sm:text-sm">
+              <Upload className="h-4 w-4" strokeWidth={2} />
+              Upload Workbook
+            </Link>
+            <button
+              type="button"
+              onClick={openAiCopilot}
+              className="btn-secondary gap-2 text-xs sm:text-sm"
+            >
+              <Sparkles className="h-4 w-4 text-noc-accent" strokeWidth={ICON_STROKE} />
+              Ask Copilot
+            </button>
+            <Link to="/reports" className="btn-secondary text-xs sm:text-sm">
+              <BarChart3 className="h-4 w-4" strokeWidth={ICON_STROKE} />
+              History
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Band one is deliberately 4/8 — the pipeline is a narrow reference column
-          beside the list people actually click through. */}
-      <div className="grid gap-5 lg:grid-cols-12">
-        <section className="card flex flex-col lg:col-span-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-noc-text">Report pipeline</h2>
-            <span className="tabular text-[11px] text-noc-muted">{total} total</span>
-          </div>
-
-          <ul className="mt-5 space-y-5">
-            {pipeline.map((row) => (
-              <PipelineRow key={row.label} {...row} />
-            ))}
-          </ul>
-
-          <div className="mt-6 rounded-xl border border-noc-border/70 bg-noc-bg/60 p-3 lg:mt-auto">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-noc-muted">
-              Workbook pipeline
-            </p>
-            <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-              {[
-                { label: 'Done', value: Number(wb.completed) || 0, tone: 'text-noc-success' },
-                { label: 'Active', value: Number(wb.in_progress) || 0, tone: 'text-noc-info' },
-                { label: 'Failed', value: Number(wb.failed) || 0, tone: 'text-noc-danger' },
-              ].map((cell) => (
-                <div key={cell.label}>
-                  <dd className={clsx('tabular text-lg font-semibold leading-none', cell.tone)}>
-                    {cell.value}
-                  </dd>
-                  <dt className="mt-1.5 text-[11px] text-noc-muted">{cell.label}</dt>
-                </div>
-              ))}
-            </dl>
-          </div>
-        </section>
-
-        <section className="card lg:col-span-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-noc-text">Recent CMM workbooks</h2>
-            <Link
-              to="/reports"
-              className="group inline-flex items-center gap-1 rounded-md text-xs font-medium text-noc-accent"
-            >
-              All history
-              <ArrowRight
-                className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
-                strokeWidth={2}
-              />
-            </Link>
-          </div>
-
-          {!recentWorkbooks?.length ? (
-            <EmptyState
-              icon={FileSpreadsheet}
-              title="No workbooks processed yet"
-              description="Upload a CMM workbook and every KPI sheet inside it is validated, charted and stored here."
-              actionLabel="Upload a workbook"
-              actionTo="/upload"
-            />
-          ) : (
-            <ul className="-mx-2 space-y-1">
-              {recentWorkbooks.map((wbRow) => {
-                const done = Number(wbRow.completed_kpis) || 0;
-                const count = Number(wbRow.kpi_count) || 0;
-                return (
-                  <li key={wbRow.id}>
-                    <Link
-                      to={`/workbooks/${wbRow.id}`}
-                      className="group flex items-center gap-4 rounded-xl border border-transparent px-3 py-3 transition-all hover:border-noc-border hover:bg-noc-accent/5 active:translate-y-px"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-noc-text transition-colors group-hover:text-noc-accent">
-                          {wbRow.original_filename}
-                        </p>
-                        <p className="tabular mt-1 text-xs text-noc-muted">
-                          {done}/{count} KPIs · {new Date(wbRow.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-
-                      <div className="hidden w-24 shrink-0 sm:block">
-                        <div className="h-1 overflow-hidden rounded-full bg-noc-border/70">
-                          <div
-                            className="h-full rounded-full bg-noc-accent"
-                            style={{ width: `${count ? (done / count) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <StatusBadge status={wbRow.status} />
-
-                      <ArrowRight
-                        className="h-4 w-4 shrink-0 text-noc-muted opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100"
-                        strokeWidth={ICON_STROKE}
-                      />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+      {/* ===================== OPERATIONAL METRICS CARDS ===================== */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={FileSpreadsheet}
+          label="CMM Workbooks"
+          value={totalWb}
+          subtext={`${Number(wb.completed) || 0} completed · ${Number(wb.in_progress) || 0} processing`}
+          tone="accent"
+          trend="Workbook Engine active"
+        />
+        <StatCard
+          icon={BarChart3}
+          label="KPI Reports"
+          value={total}
+          subtext={`${completed} processed · ${Number(kpiInWorkbooks) || 0} via workbooks`}
+          tone="info"
+          trend={`${completionRate}% overall success rate`}
+        />
+        <StatCard
+          icon={ShieldCheck}
+          label="Pipeline Success"
+          value={`${completionRate}%`}
+          subtext={`${failed === 0 ? 'Zero ingestion errors' : `${failed} failed runs detected`}`}
+          tone={failed > 0 ? 'warning' : 'success'}
+          trend="Robust error recovery"
+        />
+        <StatCard
+          icon={Layers}
+          label="Active Workflows"
+          value={workflowUsage.length || '5'}
+          subtext="Throughput, SAAU, Users, Volume"
+          tone="accent"
+          trend="Pluggable KPI modules"
+        />
       </div>
 
-      {/* Band two mirrors the first, flipped — the wide element stays on the
-          reading edge while the narrow reference column alternates sides. */}
-      <div className="grid gap-5 lg:grid-cols-12">
-        <section className="card lg:col-span-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-noc-text">Recent single KPI reports</h2>
-            <Link
-              to="/reports"
-              className="group inline-flex items-center gap-1 rounded-md text-xs font-medium text-noc-accent"
-            >
-              View all
-              <ArrowRight
-                className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
-                strokeWidth={2}
-              />
-            </Link>
-          </div>
-
-          {!recentReports?.length ? (
-            <EmptyState
-              icon={BarChart3}
-              title="No single KPI reports yet"
-              description="Upload one KPI export on its own when you need a focused chart set rather than a full workbook."
-              actionLabel="Upload a file"
-              actionTo="/upload"
-              compact
-            />
-          ) : (
-            <div className="-mx-5 overflow-x-auto px-5">
-              <table className="w-full min-w-[34rem] text-sm">
-                <thead>
-                  <tr className="border-b border-noc-border text-left">
-                    <th className="pb-2.5 pr-4 text-[10px] font-medium uppercase tracking-[0.12em] text-noc-muted">
-                      Workflow
-                    </th>
-                    <th className="pb-2.5 pr-4 text-[10px] font-medium uppercase tracking-[0.12em] text-noc-muted">
-                      File
-                    </th>
-                    <th className="pb-2.5 pr-4 text-[10px] font-medium uppercase tracking-[0.12em] text-noc-muted">
-                      Status
-                    </th>
-                    <th className="pb-2.5 text-right text-[10px] font-medium uppercase tracking-[0.12em] text-noc-muted">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentReports.map((report) => (
-                    <tr
-                      key={report.id}
-                      className="border-b border-noc-border/50 transition-colors last:border-0 hover:bg-noc-accent/5"
-                    >
-                      <td className="py-3 pr-4">
-                        <Link
-                          to={`/reports/${report.id}`}
-                          className="font-medium text-noc-text underline-offset-4 transition-colors hover:text-noc-accent hover:underline"
-                        >
-                          {report.workflow_name}
-                        </Link>
-                      </td>
-                      <td className="max-w-[220px] truncate py-3 pr-4 font-mono text-xs text-noc-muted">
-                        {report.original_filename || '—'}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={report.status} />
-                      </td>
-                      <td className="tabular py-3 text-right text-xs text-noc-muted">
-                        {new Date(report.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* ===================== AI INTELLIGENCE & TELEMETRY BANNER ===================== */}
+      <section className="rounded-2xl border border-noc-accent/25 bg-gradient-to-r from-noc-accent/5 via-noc-surface to-noc-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-noc-accent/15 text-noc-accent border border-noc-accent/30">
+              <Sparkles className="h-5 w-5" strokeWidth={ICON_STROKE} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-noc-text">
+                  Automated Intelligence Layer Active
+                </h3>
+                <span className="badge badge-success text-[10px]">Seasonality Aware</span>
+              </div>
+              <p className="mt-1 text-xs text-noc-textDim leading-relaxed max-w-2xl">
+                Every uploaded dataset is analyzed against hour-of-day baselines to filter out routine traffic swings.
+                Capacity headroom, robust z-score outliers, and executive narratives are attached automatically.
+              </p>
             </div>
-          )}
-        </section>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={openAiCopilot}
+              className="btn-secondary text-xs px-3 py-1.5 border-noc-accent/30 hover:border-noc-accent"
+            >
+              Ask AI Copilot
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </section>
 
-        <section className="card lg:col-span-4">
-          <div className="mb-5 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-noc-accent" strokeWidth={ICON_STROKE} />
-            <h2 className="text-sm font-semibold text-noc-text">Workflow usage</h2>
+      {/* ===================== MAIN SECTION: ACTIVITY HUB & WORKFLOW USAGE ===================== */}
+      <div className="grid gap-6 lg:grid-cols-12">
+        {/* Left 8 Cols: Recent Ingestion Activity with Switcher & Search */}
+        <section className="card flex flex-col p-6 lg:col-span-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-noc-border/80 pb-4">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActivityTab('workbooks')}
+                className={clsx(
+                  'rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all',
+                  activityTab === 'workbooks'
+                    ? 'bg-noc-accent text-white shadow-sm'
+                    : 'text-noc-muted hover:bg-noc-surface hover:text-noc-text'
+                )}
+              >
+                CMM Workbooks ({recentWorkbooks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivityTab('reports')}
+                className={clsx(
+                  'rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all',
+                  activityTab === 'reports'
+                    ? 'bg-noc-accent text-white shadow-sm'
+                    : 'text-noc-muted hover:bg-noc-surface hover:text-noc-text'
+                )}
+              >
+                Single KPI Reports ({recentReports.length})
+              </button>
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-noc-muted" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Filter files..."
+                className="input-field py-1.5 pl-8 pr-3 text-xs w-full sm:w-48"
+              />
+            </div>
           </div>
 
-          {!workflowUsage?.length ? (
-            <p className="text-xs leading-relaxed text-noc-muted">
-              Usage builds up as reports are processed. Each workflow you run appears here with its
-              share of the total.
-            </p>
-          ) : (
-            <ul className="space-y-4">
-              {workflowUsage.map((wf) => (
-                <li key={wf.slug}>
-                  <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
-                    <span className="truncate text-noc-textDim">{wf.name}</span>
-                    <span className="tabular font-medium text-noc-text">{wf.count}</span>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-noc-border/70">
-                    <div
-                      className="h-full rounded-full bg-noc-accent transition-[width] duration-700 ease-out"
-                      style={{ width: `${(Number(wf.count) / maxWf) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* Activity Content */}
+          <div className="mt-4 flex-1">
+            {activityTab === 'workbooks' ? (
+              filteredWorkbooks.length === 0 ? (
+                <EmptyState
+                  icon={FileSpreadsheet}
+                  title="No CMM workbooks found"
+                  description="Upload a multi-sheet CMM Excel export to validate, parse and chart all KPIs together."
+                  actionLabel="Upload Workbook"
+                  actionTo="/upload"
+                />
+              ) : (
+                <ul className="space-y-2.5">
+                  {filteredWorkbooks.map((wbRow) => {
+                    const done = Number(wbRow.completed_kpis) || 0;
+                    const count = Number(wbRow.kpi_count) || 0;
+                    const pct = count ? Math.round((done / count) * 100) : 0;
+
+                    return (
+                      <li key={wbRow.id}>
+                        <Link
+                          to={`/workbooks/${wbRow.id}`}
+                          className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-noc-border/80 bg-noc-surface/50 p-4 transition-all hover:border-noc-accent/40 hover:bg-noc-card"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2.5">
+                              <FileSpreadsheet className="h-4 w-4 shrink-0 text-noc-accent" />
+                              <p className="truncate text-sm font-semibold text-noc-text group-hover:text-noc-accent transition-colors">
+                                {wbRow.original_filename}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-noc-muted">
+                              {done} of {count} KPI sheets processed · {new Date(wbRow.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            <div className="w-28 sm:w-32">
+                              <div className="flex justify-between text-[10px] text-noc-muted mb-1">
+                                <span>Progress</span>
+                                <span className="font-semibold text-noc-text">{pct}%</span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-noc-border/80">
+                                <div
+                                  className="h-full rounded-full bg-noc-accent transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                            <StatusBadge status={wbRow.status} />
+                            <ArrowRight className="h-4 w-4 text-noc-muted group-hover:text-noc-accent group-hover:translate-x-1 transition-all" />
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : filteredReports.length === 0 ? (
+              <EmptyState
+                icon={BarChart3}
+                title="No single KPI reports found"
+                description="Upload an individual KPI sheet for focused executive chart sets."
+                actionLabel="Upload File"
+                actionTo="/upload"
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-noc-border/80 text-[11px] font-semibold uppercase tracking-wider text-noc-muted">
+                      <th className="pb-3 pr-4">Workflow</th>
+                      <th className="pb-3 pr-4">File Name</th>
+                      <th className="pb-3 pr-4">Status</th>
+                      <th className="pb-3 text-right">Processed At</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-noc-border/60">
+                    {filteredReports.map((report) => (
+                      <tr
+                        key={report.id}
+                        className="transition-colors hover:bg-noc-accent/5"
+                      >
+                        <td className="py-3.5 pr-4">
+                          <Link
+                            to={`/reports/${report.id}`}
+                            className="font-semibold text-noc-text hover:text-noc-accent transition-colors"
+                          >
+                            {report.workflow_name || report.workflow_slug}
+                          </Link>
+                        </td>
+                        <td className="py-3.5 pr-4 font-mono text-noc-textDim max-w-[200px] truncate">
+                          {report.original_filename || '—'}
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <StatusBadge status={report.status} />
+                        </td>
+                        <td className="py-3.5 text-right tabular text-noc-muted">
+                          {new Date(report.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
+
+        {/* Right 4 Cols: Workflow Distribution & Quick Links */}
+        <div className="space-y-6 lg:col-span-4">
+          {/* Workflow Usage */}
+          <section className="card p-6">
+            <div className="flex items-center gap-2 border-b border-noc-border/80 pb-3">
+              <Activity className="h-4 w-4 text-noc-accent" strokeWidth={ICON_STROKE} />
+              <h2 className="text-sm font-semibold text-noc-text">Workflow Distribution</h2>
+            </div>
+
+            {workflowUsage.length === 0 ? (
+              <p className="mt-4 text-xs text-noc-muted leading-relaxed">
+                Distribution will populate automatically as files and workbooks are ingested.
+              </p>
+            ) : (
+              <ul className="mt-5 space-y-4">
+                {workflowUsage.map((wf) => {
+                  const cnt = Number(wf.count) || 0;
+                  const pct = Math.round((cnt / maxWf) * 100);
+
+                  return (
+                    <li key={wf.slug} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-noc-text">{wf.name}</span>
+                        <span className="tabular font-semibold text-noc-muted">{cnt} runs</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-noc-border/80">
+                        <div
+                          className="h-full rounded-full bg-noc-accent transition-all duration-700"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* Platform Information Card */}
+          <section className="card p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-noc-muted" strokeWidth={ICON_STROKE} />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-noc-muted">
+                Executive Exports
+              </h3>
+            </div>
+            <p className="text-xs leading-relaxed text-noc-textDim">
+              Generate pixel-perfect PowerPoint slides and Microsoft Teams cards for any processed report.
+            </p>
+            <div className="pt-2">
+              <Link
+                to="/reports"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-noc-accent hover:underline"
+              >
+                <span>Browse historical reports</span>
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

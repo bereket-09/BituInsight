@@ -9,6 +9,7 @@ import {
   Gauge,
   Check,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 
 const ICON_STROKE = 1.75;
@@ -304,13 +305,17 @@ export default function IntelligencePanel({ intelligence }) {
       {narrative?.summary && (
         <article className="card overflow-hidden p-0">
           <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-noc-border/70 px-6 py-3.5">
-            <span className="eyebrow">Executive summary</span>
+            <span className="eyebrow flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Executive summary
+            </span>
             <span className="ml-auto flex flex-wrap items-center gap-2">
               {narrative.riskLevel && narrative.riskLevel !== 'none' && (
                 <span className="badge badge-warning">{narrative.riskLevel} risk</span>
               )}
-              <span className="badge badge-neutral" title={attribution.title}>
-                {attribution.label}
+              <span className="badge badge-neutral flex items-center gap-1" title={attribution.title}>
+                <span className="h-1.5 w-1.5 rounded-full bg-noc-accent" />
+                {attribution.label} AI
               </span>
             </span>
           </header>

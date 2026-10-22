@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { FileSearch, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { FileSearch, ChevronLeft, ChevronRight, Upload, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import { reportApi, workflowApi } from '../api';
 import ReportHistoryRow, { HISTORY_GRID } from '../components/ReportHistoryRow';
@@ -63,6 +63,7 @@ function HistorySkeleton() {
 }
 
 export default function HistoricalReports() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const [workflowSlug, setWorkflowSlug] = useState('');
@@ -70,19 +71,58 @@ export default function HistoricalReports() {
   const { data: workflows } = useQuery({
     queryKey: ['workflows'],
     queryFn: () => workflowApi.list().then((r) => r.data.workflows),
+    staleTime: 5 * 60 * 1000,
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['history', page, status, workflowSlug],
     queryFn: () =>
       reportApi
         .list({ page, limit: 15, status: status || undefined, workflowSlug: workflowSlug || undefined, grouped: true })
         .then((r) => r.data),
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
   });
 
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
   const items = data?.items ?? [];
   const filtered = Boolean(status || workflowSlug);
+
+  // Background prefetching for instant page navigation
+  useEffect(() => {
+    if (page < totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['history', page + 1, status, workflowSlug],
+        queryFn: () =>
+          reportApi
+            .list({
+              page: page + 1,
+              limit: 15,
+              status: status || undefined,
+              workflowSlug: workflowSlug || undefined,
+              grouped: true,
+            })
+            .then((r) => r.data),
+        staleTime: 60 * 1000,
+      });
+    }
+    if (page > 1) {
+      queryClient.prefetchQuery({
+        queryKey: ['history', page - 1, status, workflowSlug],
+        queryFn: () =>
+          reportApi
+            .list({
+              page: page - 1,
+              limit: 15,
+              status: status || undefined,
+              workflowSlug: workflowSlug || undefined,
+              grouped: true,
+            })
+            .then((r) => r.data),
+        staleTime: 60 * 1000,
+      });
+    }
+  }, [page, totalPages, status, workflowSlug, queryClient]);
 
   const handleDownload = async (reportId) => {
     const res = await reportApi.download(reportId);
@@ -106,9 +146,14 @@ export default function HistoricalReports() {
           </p>
         </div>
         {data && (
-          <p className="tabular text-xs text-noc-muted">
-            {data.total} {data.total === 1 ? 'entry' : 'entries'}
-          </p>
+          <div className="flex items-center gap-2">
+            {isFetching && !isLoading && (
+              <RefreshCw className="h-3 w-3 animate-spin text-noc-accent" title="Refreshing archive..." />
+            )}
+            <p className="tabular text-xs text-noc-muted">
+              {data.total} {data.total === 1 ? 'entry' : 'entries'}
+            </p>
+          </div>
         )}
       </header>
 
