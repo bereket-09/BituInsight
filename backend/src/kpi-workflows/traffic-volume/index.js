@@ -10,6 +10,9 @@ module.exports = {
   description:
     'Analyzes 2G/3G and 4G data volume trends, peak hours, and technology contribution percentages.',
   version: '1.0.0',
+  // Sample workflow kept for the one report that used it; not offered for new
+  // uploads, which only list the KPIs the NOC actually exports.
+  hidden: true,
   metadata: {
     category: 'Traffic',
     technology: ['2G', '3G', '4G'],

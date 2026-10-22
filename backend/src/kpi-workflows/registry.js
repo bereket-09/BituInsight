@@ -64,6 +64,7 @@ async function resolveWorkflow(slug) {
 function describe(wf) {
   return {
     slug: wf.slug,
+    hidden: Boolean(wf.hidden),
     name: wf.name,
     description: wf.description,
     version: wf.version,

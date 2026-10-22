@@ -24,9 +24,15 @@ async function listWorkflows(req, res, next) {
       'SELECT id, slug, name, description, version, metadata, is_active FROM kpi_workflows WHERE is_active = TRUE ORDER BY name'
     );
 
+    // Sample workflows stay resolvable so their existing reports still open,
+    // but are not offered for new uploads.
+    const HIDDEN_SLUGS = new Set(
+      getAllWorkflows().filter((w) => w.hidden).map((w) => w.slug)
+    );
+
     const codeWorkflows = getAllWorkflows();
     const merged = await Promise.all(
-      dbResult.rows.map(async (db) => {
+      dbResult.rows.filter((db) => !HIDDEN_SLUGS.has(db.slug)).map(async (db) => {
         const code = codeWorkflows.find((c) => c.slug === db.slug) || (await describeSafely(db.slug));
         const dbMeta = db.metadata && typeof db.metadata === 'object' ? db.metadata : {};
         return {
