@@ -141,8 +141,15 @@ function completeOf(hours) {
   return complete.length ? complete : hours;
 }
 
-/** Days or weeks: the mean of the hours in the bucket, plus the bucket's peaks. */
-function collectBuckets(hours, bucket, fields) {
+/**
+ * Days or weeks: how the hours combine depends on what is being measured.
+ *
+ * A data volume is cumulative — a day is the hours added up, and averaging them
+ * would report a typical hour while calling it a day. A count of concurrent
+ * bearers is not cumulative: adding 24 hourly SAAU figures would describe
+ * nothing real, so those are averaged. Peaks are the busiest hour either way.
+ */
+function collectBuckets(hours, bucket, fields, dailyAggregate = 'avg') {
   const groups = new Map();
   for (const h of hours) {
     const key = bucketKeyFor(h.date, bucket);
@@ -157,9 +164,16 @@ function collectBuckets(hours, bucket, fields) {
       // Averages are taken over the hours every data centre reported, so a gap
       // in one node's export does not pull the other's average down.
       const whole = completeOf(group);
-      const avg = Object.fromEntries(fields.map((f) => [f, mean(whole.map((h) => h.sums[f]))]));
+      // A sum counts every hour that was recorded; an average is taken only over
+      // the hours all sites reported, so one node's gap cannot drag it down.
+      const summing = dailyAggregate === 'sum';
+      const basis = summing ? group : whole;
+      const combine = summing
+        ? (values) => values.reduce((a, b) => a + b, 0)
+        : mean;
+      const avg = Object.fromEntries(fields.map((f) => [f, combine(basis.map((h) => h.sums[f]))]));
       const avgSites = Object.fromEntries(
-        SITES.map((s) => [siteKey(s), mean(whole.map((h) => h.sites[siteKey(s)]))])
+        SITES.map((s) => [siteKey(s), combine(basis.map((h) => h.sites[siteKey(s)]))])
       );
       const peakHour = group.reduce((best, h) => (h.sums.total > best.sums.total ? h : best), group[0]);
       const peakSites = Object.fromEntries(
@@ -241,14 +255,17 @@ function findBest(series, field, compare) {
  * @param {string[]} config.fields    every summed field, `total` included
  * @param {number} config.scale       multiplier applied to every raw value (1 = none)
  * @param {number} config.decimals    display rounding
+ * @param {'sum'|'avg'} [config.dailyAggregate='avg']  how hours combine into a
+ *   day or week: 'sum' for a cumulative measure such as data volume, 'avg' for
+ *   a level such as concurrent bearers.
  */
-function buildSiteTimeSeries(records, { fields, scale = 1, decimals = 0 }) {
+function buildSiteTimeSeries(records, { fields, scale = 1, decimals = 0, dailyAggregate = 'avg' }) {
   // "Every data centre" means every one this export actually carries, so a
   // single-site file is not read as 100% partial.
   const expected = SITES.filter((site) => records.some((r) => r.site === site));
   const hoursRaw = collectHours(records, fields, expected.length ? expected : SITES);
-  const dailyRaw = collectBuckets(hoursRaw, 'day', fields);
-  const weeklyRaw = dailyRaw.length > 7 ? collectBuckets(hoursRaw, 'week', fields) : [];
+  const dailyRaw = collectBuckets(hoursRaw, 'day', fields, dailyAggregate);
+  const weeklyRaw = dailyRaw.length > 7 ? collectBuckets(hoursRaw, 'week', fields, dailyAggregate) : [];
 
   const opts = { fields, scale, decimals };
   const native = hoursRaw.map((h) => emit(h, { ...opts, bucket: 'hour' }));

@@ -225,11 +225,15 @@ function createCalculator(config = {}) {
     const metaList = transformed.kpis || [];
     // Only the primary KPI keeps its raw-cadence series: 22 KPIs at 672 raw
     // points each is a report payload nobody can load, and the customer asked
-    // for hourly and daily figures.
+    // for hourly and daily figures. A single-KPI report has one KPI and it is
+    // the primary, so it keeps everything.
     const kpis = metaList.map((meta, index) =>
       buildKpi(meta, { includeRaw: index === 0, includePrimary: index === 0 })
     );
     const primary = kpis[0] || null;
+    // One report per KPI is how the workbook path uploads these files; the
+    // whole-workbook report is still produced for a single-report upload.
+    const singleKpi = kpis.length === 1;
 
     const ranked = [...kpis]
       .filter((k) => k.metrics.average != null)
@@ -258,6 +262,7 @@ function createCalculator(config = {}) {
         unit: '%',
         domainLabel,
         kpiGroupLabel,
+        singleKpi,
         kpiCount: kpis.length,
         kpiNames: kpis.map((k) => k.name),
         nodeCount: allNodes.length,

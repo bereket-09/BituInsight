@@ -27,6 +27,8 @@ function buildVolumeTimeSeries(records) {
   const timeSeries = buildSiteTimeSeries(records, {
     fields: FIELDS,
     // The one place megabytes become terabytes.
+    // A day of traffic is its hours added up, not a typical hour.
+    dailyAggregate: 'sum',
     scale: 1 / MB_PER_TB,
     decimals: TB_DECIMALS,
   });
