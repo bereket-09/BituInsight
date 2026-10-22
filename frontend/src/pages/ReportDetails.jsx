@@ -149,8 +149,6 @@ export default function ReportDetails() {
   const [spanId, setSpanId] = useState(null);
   // PS and CS are the same engine configured twice, so they share a view.
   const [kpiId, setKpiId] = useState(null);
-  const isSuccessRatio =
-    report?.workflow_slug === 'ps-kpis-sr' || report?.workflow_slug === 'cs-kpis-sr';
 
   useEffect(() => {
     return () => {
@@ -235,6 +233,11 @@ export default function ReportDetails() {
   }
 
   const report = data;
+  // PS and CS share one explorer. Declared after `report`, not beside the other
+  // useState calls: reading it earlier is a temporal dead zone error that throws
+  // on every report page, not just these two.
+  const isSuccessRatio =
+    report.workflow_slug === 'ps-kpis-sr' || report.workflow_slug === 'cs-kpis-sr';
   const summary = report.summary || {};
   const reportData = report.report_data || {};
   const calculated = reportData.calculated || {};
