@@ -3,6 +3,7 @@ import { Calendar, Download, TrendingUp } from 'lucide-react';
 import { useChartTheme } from '../hooks/useChartTheme';
 import { useSpanState } from '../hooks/useSpanState';
 import SeriesDataTable from './SeriesDataTable';
+import CmgPeakAnnotations from './CmgPeakAnnotations';
 import { buildCsvFilename, downloadCsv } from '../utils/csv';
 import { formatSeriesValue } from '../utils/seriesSpans';
 
@@ -20,9 +21,14 @@ function formatGbps(value) {
  * `spanId`/`onSpanChange` are optional. Supplied, the page owns the granularity
  * and this table stays in step with the chart above it; omitted, the table keeps
  * its own selection and starts on the span the backend recommends.
+ *
+ * `peaks` (`calculated.peaks`) is optional too: given it, the detected peaks and
+ * what each coincides with are listed above the data points. Reports processed
+ * before peak annotation existed simply do not carry it.
  */
 export default function CmgThroughputDataTable({
   timeSeries,
+  peaks,
   filePrefix = 'cmg-throughput',
   spanId,
   onSpanChange,
@@ -91,6 +97,8 @@ export default function CmgThroughputDataTable({
           </span>
         </div>
       )}
+
+      <CmgPeakAnnotations peaks={peaks} />
 
       <SeriesDataTable
         timeSeries={timeSeries}

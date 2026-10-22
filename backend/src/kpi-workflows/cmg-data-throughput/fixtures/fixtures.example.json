@@ -1,0 +1,27 @@
+{
+  "_README": "EXAMPLE ONLY — NOT REAL FIXTURE DATA. The teams, competitions, dates and kickoff times below are invented placeholders and must never be used in a report. This file is never loaded by the application. To supply a real list, copy it to 'fixtures.json' in this directory (or point CMG_FIXTURES_FILE at your own file) and replace every entry with verified fixtures.",
+  "_fields": {
+    "start": "required — kickoff, ISO 8601 with an explicit offset or a 'Z' instant",
+    "end": "optional — final whistle; defaults to start + 120 minutes",
+    "competition": "required if no team names — e.g. 'Premier League'",
+    "homeTeam": "optional",
+    "awayTeam": "optional",
+    "kickoff": "optional display label; defaults to a label formatted from 'start'"
+  },
+  "events": [
+    {
+      "start": "2000-01-01T20:00:00+03:00",
+      "end": "2000-01-01T21:55:00+03:00",
+      "competition": "EXAMPLE LEAGUE — NOT REAL",
+      "homeTeam": "Example United FC",
+      "awayTeam": "Placeholder Rovers FC",
+      "kickoff": "1 Jan 2000, 20:00 (EXAMPLE)"
+    },
+    {
+      "start": "2000-01-02T22:00:00+03:00",
+      "competition": "EXAMPLE CUP — NOT REAL",
+      "homeTeam": "Sample Town AFC",
+      "awayTeam": "Dummy City FC"
+    }
+  ]
+}

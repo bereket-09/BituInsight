@@ -2,6 +2,10 @@ const trafficVolume = require('./traffic-volume');
 const telecomMetric = require('./telecom-metric');
 const cmgDataThroughput = require('./cmg-data-throughput');
 const peakAttachedUsers = require('./peak-attached-users');
+const totalDataVolume = require('./total-data-volume');
+const saau = require('./saau');
+const psKpisSr = require('./ps-kpis-sr');
+const csKpisSr = require('./cs-kpis-sr');
 
 /**
  * Code workflows. These stay exactly as they were: hand-written modules, resolved
@@ -12,6 +16,10 @@ const WORKFLOW_REGISTRY = {
   [telecomMetric.slug]: telecomMetric,
   [cmgDataThroughput.slug]: cmgDataThroughput,
   [peakAttachedUsers.slug]: peakAttachedUsers,
+  [totalDataVolume.slug]: totalDataVolume,
+  [saau.slug]: saau,
+  [psKpisSr.slug]: psKpisSr,
+  [csKpisSr.slug]: csKpisSr,
 };
 
 /**

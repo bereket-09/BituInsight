@@ -18,6 +18,7 @@ import { useChartTheme } from '../hooks/useChartTheme';
 import { useSpanState } from '../hooks/useSpanState';
 import ChartFullscreenModal from './ChartFullscreenModal';
 import GranularityControl from './GranularityControl';
+import AttachedUsersExportPanel from './AttachedUsersExportPanel';
 
 const COLORS = {
   users4g: '#4ADE80',
@@ -221,42 +222,47 @@ export default function AttachedUsersExplorer({ timeSeries, calculated = {}, spa
   );
 
   return (
-    <div className={clsx('card space-y-4', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold">Attached users timeline</h3>
-          <p className="mt-1 text-xs text-noc-muted">
-            2G + 3G + 4G users attached each hour, added across{' '}
-            {metrics.cmmNodeCount ? `all ${metrics.cmmNodeCount} CMMs` : 'every CMM'}.
-          </p>
+    <div className="space-y-5">
+      <div className={clsx('card space-y-4', className)}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold">Attached users timeline</h3>
+            <p className="mt-1 text-xs text-noc-muted">
+              2G + 3G + 4G users attached each hour, added across{' '}
+              {metrics.cmmNodeCount ? `all ${metrics.cmmNodeCount} CMMs` : 'every CMM'}.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary shrink-0 py-1.5 text-xs"
+            onClick={() => setFullscreen(true)}
+            title="Fullscreen"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-secondary shrink-0 py-1.5 text-xs"
-          onClick={() => setFullscreen(true)}
-          title="Fullscreen"
+
+        {controls}
+        {banner}
+        {note}
+        <AttachChart data={data} view={view} theme={theme} />
+
+        <ChartFullscreenModal
+          open={fullscreen}
+          onClose={() => setFullscreen(false)}
+          title={`Attached users — ${timeSeries.detected?.spanLabel || ''}`}
         >
-          <Maximize2 className="h-3.5 w-3.5" />
-        </button>
+          <div className="space-y-4">
+            {controls}
+            {banner}
+            {note}
+            <AttachChart data={data} view={view} theme={theme} height={520} />
+          </div>
+        </ChartFullscreenModal>
       </div>
 
-      {controls}
-      {banner}
-      {note}
-      <AttachChart data={data} view={view} theme={theme} />
-
-      <ChartFullscreenModal
-        open={fullscreen}
-        onClose={() => setFullscreen(false)}
-        title={`Attached users — ${timeSeries.detected?.spanLabel || ''}`}
-      >
-        <div className="space-y-4">
-          {controls}
-          {banner}
-          {note}
-          <AttachChart data={data} view={view} theme={theme} height={520} />
-        </div>
-      </ChartFullscreenModal>
+      {/* Voice and packet grouped separately, peak beside average. */}
+      <AttachedUsersExportPanel calculated={calculated} />
     </div>
   );
 }

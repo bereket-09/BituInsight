@@ -36,6 +36,40 @@ const ANALYTICS_PROFILES = {
       { key: 'mdc2', label: 'MDC2' },
     ],
   },
+  'total-data-volume': {
+    unit: 'TB',
+    streams: [
+      { key: 'mdc1', label: 'MDC1' },
+      { key: 'mdc2', label: 'MDC2' },
+    ],
+  },
+  // SAAU is a bearer count, unit "[#]" in the export. It carries no unit on
+  // purpose: the terabyte conversion belongs to Total Data Volume alone.
+  saau: {
+    unit: '',
+    streams: [
+      { key: 'mdc1', label: 'MDC1' },
+      { key: 'mdc2', label: 'MDC2' },
+    ],
+  },
+  // Success-ratio workbooks hold many KPIs; the series the analytics layer sees
+  // is the report's primary KPI, split by data centre. Balance between MDC1 and
+  // MDC2 is the useful comparison — one centre succeeding less than the other
+  // is a finding, and for a percentage the two should sit on top of each other.
+  'ps-kpis-sr': {
+    unit: '%',
+    streams: [
+      { key: 'mdc1', label: 'MDC1' },
+      { key: 'mdc2', label: 'MDC2' },
+    ],
+  },
+  'cs-kpis-sr': {
+    unit: '%',
+    streams: [
+      { key: 'mdc1', label: 'MDC1' },
+      { key: 'mdc2', label: 'MDC2' },
+    ],
+  },
 };
 
 /**

@@ -3,6 +3,15 @@ const {
   buildThroughputTimeSeries,
   formatThroughputGbps,
 } = require('./timeSeries');
+const { detectPeaks } = require('./peaks');
+const {
+  annotatePeaks,
+  PRE_MATCH_MARGIN_MINUTES,
+  POST_MATCH_MARGIN_MINUTES,
+  DEFAULT_EVENT_MINUTES,
+} = require('./eventAnnotations');
+const { loadFixtures } = require('./fixtures');
+const logger = require('../../utils/logger');
 
 function aggregateByPeriodAndNode(records) {
   const map = new Map();
@@ -26,7 +35,47 @@ function aggregateByPeriodAndNode(records) {
   return [...map.values()].sort((a, b) => a.date - b.date);
 }
 
-function calculate(transformed) {
+/**
+ * Detect peaks and annotate them with any scheduled events that coincide.
+ *
+ * Additive and non-fatal: an existing report that predates this carries no
+ * `peaks` key, and a failure here must never cost the user their report — the
+ * same rule the intelligence layer follows.
+ *
+ * @param {Array}  series          the primary time series.
+ * @param {Array}  [options.events] inject an event list directly (tests, a
+ *                                  future feed). Otherwise the pluggable
+ *                                  fixture source is read, and it is empty
+ *                                  unless an operator supplied a list.
+ */
+function buildPeakAnnotations(series, options = {}) {
+  try {
+    const detected = detectPeaks(series);
+    const events = Array.isArray(options.events) ? options.events : loadFixtures();
+    const points = annotatePeaks(detected.points, events);
+
+    return {
+      ...detected,
+      points,
+      matchedCount: points.filter((p) => p.matched).length,
+      unmatchedCount: points.filter((p) => !p.matched).length,
+      eventSource: {
+        configured: events.length > 0,
+        eventCount: events.length,
+      },
+      margins: {
+        preMatchMinutes: PRE_MATCH_MARGIN_MINUTES,
+        postMatchMinutes: POST_MATCH_MARGIN_MINUTES,
+        defaultEventMinutes: DEFAULT_EVENT_MINUTES,
+      },
+    };
+  } catch (err) {
+    logger.warn('Peak annotation failed — report continues without it', { error: err.message });
+    return { available: false, reason: 'Peak detection failed', points: [] };
+  }
+}
+
+function calculate(transformed, options = {}) {
   const { records } = transformed;
   const aggregatedPeriods = aggregateByPeriodAndNode(records);
   const timeSeries = buildThroughputTimeSeries(aggregatedPeriods);
@@ -45,6 +94,7 @@ function calculate(transformed) {
 
   const anomalies = detectSpikes(primary);
   const dailyPeaks = timeSeries.dailyPeaks || [];
+  const peaks = buildPeakAnnotations(primary, options);
 
   return {
     valueType: 'throughput',
@@ -83,6 +133,7 @@ function calculate(transformed) {
     aggregatedPeriods,
     dailyPeaks,
     peaksByView: timeSeries.peaksByView,
+    peaks,
     anomalies,
     rawRecordCount: records.length,
   };

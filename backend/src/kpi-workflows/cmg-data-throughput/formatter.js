@@ -1,11 +1,34 @@
 const { formatThroughputGbps } = require('./calculator');
 
+/**
+ * The peak list, with whatever each peak coincides with. Reports processed
+ * before peak annotation existed carry no `peaks`, so the section is omitted
+ * rather than rendered empty.
+ */
+function peakSection(calculated) {
+  const peaks = calculated.peaks;
+  if (!peaks?.available || !peaks.points?.length) return null;
+
+  const lines = peaks.points
+    .slice(0, 8)
+    .map((p) => `- **${p.label}** · ${formatThroughputGbps(p.value)} — ${p.note}`);
+  if (peaks.points.length > 8) {
+    lines.push(`- …and ${peaks.points.length - 8} more in the report.`);
+  }
+
+  return {
+    title: `Throughput peaks (${peaks.matchedCount} coinciding with a known event, ${peaks.unmatchedCount} flagged for investigation)`,
+    text: lines.join('\n\n'),
+  };
+}
+
 function formatTeamsMessage(summary, calculated, reportId) {
   const { metrics, anomalies } = calculated;
   const anomalyText =
     anomalies.length > 0
       ? anomalies.map((a) => `- ${a.message}`).join('\n')
       : 'No anomalies detected';
+  const peaks = peakSection(calculated);
 
   return {
     '@type': 'MessageCard',
@@ -32,6 +55,7 @@ function formatTeamsMessage(summary, calculated, reportId) {
       },
       { title: 'Summary', text: summary.narrative },
       { title: 'Anomalies', text: anomalyText },
+      ...(peaks ? [peaks] : []),
     ],
   };
 }

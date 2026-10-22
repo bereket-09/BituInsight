@@ -23,6 +23,10 @@ import CmgThroughputDataTable from '../components/CmgThroughputDataTable';
 import SeriesDataTable from '../components/SeriesDataTable';
 import CmgThroughputInsight from '../components/CmgThroughputInsight';
 import AttachedUsersExplorer from '../components/AttachedUsersExplorer';
+import DataVolumeExplorer from '../components/DataVolumeExplorer';
+import SaauExplorer from '../components/SaauExplorer';
+import SuccessRatioExplorer from '../components/SuccessRatioExplorer';
+import SuccessRatioInsight from '../components/SuccessRatioInsight';
 import AttachedUsersInsight from '../components/AttachedUsersInsight';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ReportPptExportButton from '../components/ReportPptExportButton';
@@ -143,6 +147,10 @@ export default function ReportDetails() {
   // One granularity for the whole report: the chart and the data-point list below
   // it read the same span, so they can never show different numbers.
   const [spanId, setSpanId] = useState(null);
+  // PS and CS are the same engine configured twice, so they share a view.
+  const [kpiId, setKpiId] = useState(null);
+  const isSuccessRatio =
+    report?.workflow_slug === 'ps-kpis-sr' || report?.workflow_slug === 'cs-kpis-sr';
 
   useEffect(() => {
     return () => {
@@ -364,6 +372,8 @@ export default function ReportDetails() {
             <CmgThroughputInsight summary={summary} calculated={calculated} />
           ) : report.workflow_slug === 'peak-attached-users' ? (
             <AttachedUsersInsight summary={summary} calculated={calculated} />
+          ) : isSuccessRatio ? (
+            <SuccessRatioInsight summary={summary} calculated={calculated} />
           ) : (
             // Older reports (and any run where the intelligence layer was skipped)
             // still carry the workflow's own template narrative.
@@ -429,6 +439,30 @@ export default function ReportDetails() {
                   spanId={spanId}
                   onSpanChange={setSpanId}
                 />
+              ) : isSuccessRatio ? (
+                <SuccessRatioExplorer
+                  calculated={calculated}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                  kpiId={kpiId}
+                  onKpiChange={setKpiId}
+                />
+              ) : report.workflow_slug === 'total-data-volume' ? (
+                <DataVolumeExplorer
+                  timeSeries={timeSeries}
+                  calculated={calculated}
+                  summary={summary}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                />
+              ) : report.workflow_slug === 'saau' ? (
+                <SaauExplorer
+                  timeSeries={timeSeries}
+                  calculated={calculated}
+                  summary={summary}
+                  spanId={spanId}
+                  onSpanChange={setSpanId}
+                />
               ) : report.workflow_slug === 'cmg-data-throughput' ? (
                 <CmgThroughputExplorer
                   timeSeries={timeSeries}
@@ -477,6 +511,7 @@ export default function ReportDetails() {
               meta={timeSeries.detected?.spanLabel}
             >
               <CmgThroughputDataTable
+                  peaks={calculated?.peaks}
                 timeSeries={timeSeries}
                 spanId={spanId}
                 onSpanChange={setSpanId}

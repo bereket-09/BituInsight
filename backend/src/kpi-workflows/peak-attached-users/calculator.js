@@ -38,7 +38,11 @@ function buildDailyStats(hourly, daily) {
       avg4g: d.users4g,
       peak4g: peakOf('users4g'),
       avg3g: d.users3g,
+      // Peak beside average for every measure, so the export can show the pair
+      // on one row rather than only for 4G and the total.
+      peak3g: peakOf('users3g'),
       avg2g: d.users2g,
+      peak2g: peakOf('users2g'),
       avgVlr: d.vlr,
       peakVlr: peakOf('vlr'),
       avgBhca: d.bhca,
