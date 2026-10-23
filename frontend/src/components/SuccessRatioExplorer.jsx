@@ -156,8 +156,14 @@ function RatioChart({ data, view, kpi, average, theme, height = 380 }) {
 /**
  * Per-KPI explorer for a success-ratio report.
  *
- * One KPI at a time, never a blend of several: pick a KPI and see it per node,
- * per data centre and combined, at whichever granularity the report carries.
+ * One KPI at a time, never a blend of several: see it per node, per data centre
+ * and combined, at whichever granularity the report carries.
+ *
+ * A workbook upload makes one report per KPI, so most reports carry a single
+ * KPI and there is nothing to pick between — the picker is dropped and the
+ * chart takes the full width. A whole-workbook report (a single-report upload,
+ * and every report made before the workbook path existed) still carries all of
+ * them, and keeps its picker.
  */
 export default function SuccessRatioExplorer({
   calculated = {},
@@ -214,6 +220,7 @@ export default function SuccessRatioExplorer({
 
   const kpiMetrics = kpi?.metrics || {};
   const incomplete = kpiMetrics.missingReadings > 0;
+  const showPicker = kpis.length > 1;
 
   const controls = (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -275,15 +282,22 @@ export default function SuccessRatioExplorer({
 
   return (
     <div className={clsx('space-y-5', className)}>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
-        <div className="card">
-          <SuccessRatioKpiPicker
-            kpis={kpiIndex}
-            value={kpi?.id}
-            onChange={setKpiId}
-            attentionThreshold={metrics.attentionThreshold}
-          />
-        </div>
+      <div
+        className={clsx(
+          'grid gap-5',
+          showPicker && 'lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]'
+        )}
+      >
+        {showPicker && (
+          <div className="card">
+            <SuccessRatioKpiPicker
+              kpis={kpiIndex}
+              value={kpi?.id}
+              onChange={setKpiId}
+              attentionThreshold={metrics.attentionThreshold}
+            />
+          </div>
+        )}
 
         <div className="card space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">

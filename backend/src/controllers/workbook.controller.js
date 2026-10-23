@@ -20,8 +20,14 @@ async function previewWorkbook(req, res, next) {
       fileName: req.file.originalname,
       fileSize: req.file.size,
       // Only steer someone into workbook mode when it can do something with the
-      // file, and never when a dedicated workflow was built for this export.
-      suggestWorkbookMode: dataSheetCount >= 2 && preview.validCount > 0 && !suggestedWorkflow,
+      // file, and never when a dedicated single-report workflow was built for
+      // this export. A workflow that asks for the workbook treatment itself
+      // (PS/CS success ratios) is the opposite case: workbook mode is how it is
+      // meant to be read, and each of its KPIs becomes a report of its own.
+      suggestWorkbookMode:
+        dataSheetCount >= 2 &&
+        preview.validCount > 0 &&
+        (!suggestedWorkflow || Boolean(suggestedWorkflow.workbookMode)),
       suggestedWorkflow,
       dataSheetCount,
       ...preview,
@@ -53,7 +59,7 @@ async function uploadWorkbook(req, res, next) {
     );
 
     res.status(202).json({
-      message: 'CMM workbook accepted — processing all Data sheets',
+      message: `${preview.workbookWorkflow?.name || 'CMM'} workbook accepted — processing all Data sheets`,
       workbookId: workbook.id,
       status: 'pending',
       preview: {

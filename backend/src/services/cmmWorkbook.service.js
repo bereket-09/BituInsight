@@ -8,9 +8,11 @@ const { loadWorkbook } = require('../utils/workbookLoader');
 const { readSheetRows } = require('./excelParser.service');
 const { validateStructure } = require('../kpi-workflows/telecom-metric/validator');
 const { TELECOM_METRIC_SLUG, validateReport, processReport } = require('./workflowEngine.service');
+const { findWorkbookWorkflow } = require('../kpi-workflows/registry');
 const { DEFAULT_THRESHOLD_PERCENT, isUnset } = require('../kpi-workflows/telecom-metric/constants');
 const chartStorage = require('./chartStorage.service');
 const sourceFile = require('./sourceFile.service');
+const { correlateWorkbookKpis } = require('../analytics');
 
 const CMM_HEADER_ROW = 0;
 const CMM_DATA_START_ROW = 2;
@@ -123,20 +125,53 @@ function analyzeSheet(worksheet, sheetIndex = 0) {
   };
 }
 
+/**
+ * The KPI inventory of a workbook, one row per "Data for …" sheet.
+ *
+ * A workflow that claims the workbook supplies its own inventory — it knows
+ * where its value column is and which column names the node, which the CMM
+ * reader does not. Each row then carries that workflow's slug, and the pipeline
+ * routes the KPI's report to it. With nothing claiming the file (every CMM
+ * workbook), the CMM reader runs exactly as it always has and the rows carry no
+ * slug, so the pipeline falls back to telecom-metric.
+ */
+function inventoryKpis(sheetsMeta) {
+  const sheetNames = sheetsMeta.map((s) => s.name);
+  const workflow = findWorkbookWorkflow(sheetNames);
+
+  if (workflow) {
+    const { kpis } = workflow.listWorkbookKpis(sheetsMeta.map((s) => s.worksheet));
+    const byName = new Map(sheetsMeta.map((s) => [s.name, s.index]));
+    return {
+      workflow: { slug: workflow.slug, name: workflow.name },
+      dataSheets: kpis.map((kpi) => ({
+        ...kpi,
+        sheetIndex: byName.get(kpi.sheetName) ?? 0,
+        kpiSlug: kpi.kpiSlug || slugFromKpi(kpi.kpiName),
+      })),
+    };
+  }
+
+  return {
+    workflow: null,
+    dataSheets: sheetsMeta
+      .filter(({ name }) => isDataSheet(name))
+      .map(({ worksheet, index }) => analyzeSheet(worksheet, index)),
+  };
+}
+
 async function previewWorkbook(filePath) {
   const sheetsMeta = await loadWorkbookSheets(filePath);
-  const allSheets = sheetsMeta.map(({ worksheet, index }) => analyzeSheet(worksheet, index));
-  const dataSheets = allSheets.filter((s) => isDataSheet(s.sheetName));
-  const ignoredSheets = allSheets
-    .filter((s) => !isDataSheet(s.sheetName))
-    .map((s) => s.sheetName);
+  const { workflow, dataSheets } = inventoryKpis(sheetsMeta);
+  const dataSheetNames = new Set(dataSheets.map((s) => s.sheetName));
+  const ignoredSheets = sheetsMeta.filter((s) => !dataSheetNames.has(s.name)).map((s) => s.name);
 
   const validKpis = dataSheets.filter((s) => s.valid);
   const invalidKpis = dataSheets.filter((s) => !s.valid);
 
   return {
     fileName: path.basename(filePath),
-    totalSheets: allSheets.length,
+    totalSheets: sheetsMeta.length,
     dataSheetCount: dataSheets.length,
     ignoredSheetCount: ignoredSheets.length,
     validCount: validKpis.length,
@@ -145,13 +180,19 @@ async function previewWorkbook(filePath) {
     validKpis,
     invalidKpis,
     ignoredSheets: ignoredSheets.slice(0, 30),
-    sheetNames: allSheets.map((s) => s.sheetName),
+    sheetNames: sheetsMeta.map((s) => s.name),
+    // Null for a CMM workbook; the claiming workflow for a PS/CS export.
+    workbookWorkflow: workflow,
   };
 }
 
-async function getWorkflowId() {
-  const result = await pool.query('SELECT id FROM kpi_workflows WHERE slug = $1', [TELECOM_METRIC_SLUG]);
-  if (result.rows.length === 0) throw new Error(`Workflow not found: ${TELECOM_METRIC_SLUG}`);
+/**
+ * The workflow row a child report is filed under. Defaults to telecom-metric,
+ * which is what every CMM workbook KPI has always used.
+ */
+async function getWorkflowId(slug = TELECOM_METRIC_SLUG) {
+  const result = await pool.query('SELECT id FROM kpi_workflows WHERE slug = $1', [slug]);
+  if (result.rows.length === 0) throw new Error(`Workflow not found: ${slug}`);
   return result.rows[0].id;
 }
 
@@ -278,12 +319,19 @@ async function saveCharts(reportId, charts) {
 
 async function processSingleKpiReport(reportId, filePath, kpiMeta, thresholdConfig = {}) {
   const threshold = resolveKpiThreshold(kpiMeta, thresholdConfig);
+  // A KPI says which workflow reads it. Absent — every CMM workbook KPI — it is
+  // telecom-metric, exactly as before.
+  const workflowSlug = kpiMeta.workflowSlug || TELECOM_METRIC_SLUG;
   const parseOptions = {
     sheetName: kpiMeta.sheetName,
     headerRowIndex: CMM_HEADER_ROW,
     dataStartRowIndex: CMM_DATA_START_ROW,
     autoDetect: false,
     metricColumnName: kpiMeta.metricColumnName,
+    // Only a workbook-mode loadSource reads this: it narrows its read to this
+    // report's own KPI sheet. The sheet name is the identifier, not the KPI
+    // name, because two sheets could carry the same KPI name.
+    kpiSheetName: kpiMeta.sheetName,
   };
   const workflowContext = {
     kpiName: kpiMeta.kpiName,
@@ -294,7 +342,7 @@ async function processSingleKpiReport(reportId, filePath, kpiMeta, thresholdConf
 
   try {
     await updateReportStatus(reportId, 'validating');
-    const validation = await validateReport(TELECOM_METRIC_SLUG, filePath, parseOptions, workflowContext);
+    const validation = await validateReport(workflowSlug, filePath, parseOptions, workflowContext);
     if (!validation.valid) {
       await updateReportStatus(reportId, 'failed', {
         validation_errors: validation.errors,
@@ -305,7 +353,7 @@ async function processSingleKpiReport(reportId, filePath, kpiMeta, thresholdConf
 
     await updateReportStatus(reportId, 'processing');
     const result = await processReport(
-      TELECOM_METRIC_SLUG,
+      workflowSlug,
       filePath,
       reportId,
       parseOptions,
@@ -366,11 +414,19 @@ async function runWorkbookPipeline(workbookId, userId, filePath, fileInfo, thres
     });
 
     const preview = await previewWorkbook(filePath);
-    const workflowId = await getWorkflowId();
     const toProcess = preview.validKpis;
+
+    // One lookup per distinct workflow. A CMM workbook has exactly one —
+    // telecom-metric — so this is the same single query it always was.
+    const workflowIds = new Map();
+    const workflowIdFor = async (slug = TELECOM_METRIC_SLUG) => {
+      if (!workflowIds.has(slug)) workflowIds.set(slug, await getWorkflowId(slug));
+      return workflowIds.get(slug);
+    };
 
     const childReports = [];
     for (const kpi of toProcess) {
+      const workflowId = await workflowIdFor(kpi.workflowSlug);
       const report = await createChildReport(userId, workflowId, workbookId, fileInfo, kpi);
       childReports.push({ report, kpi });
     }
@@ -470,10 +526,14 @@ async function getWorkbookById(workbookId, userId) {
     kpiThresholds: summary.kpiThresholds,
   });
 
+  const correlationAnalysis = correlateWorkbookKpis(reportsResult.rows);
+
   return {
     ...workbook,
     defaultThreshold: thresholdConfig.defaultThreshold,
     kpiThresholds: thresholdConfig.kpiThresholds,
+    correlationAnalysis,
+    capacityRadar: correlationAnalysis.capacityRadar,
     kpis: reportsResult.rows.map((r) => ({
       reportId: r.id,
       sheetName: r.sheet_name,
@@ -571,11 +631,15 @@ async function updateKpiThreshold(workbookId, reportId, userId, threshold) {
   // file from its stored bytes when the path no longer resolves.
   const sourcePath = await sourceFile.resolveWorkbookFile(workbookId, wb.stored_path);
 
+  const storedKpi = wbSummary.preview?.kpis?.find((k) => k.kpiName === report.kpi_name);
   const kpiMeta = {
     sheetName: report.sheet_name,
     kpiName: report.kpi_name,
-    metricColumnName: wbSummary.preview?.kpis?.find((k) => k.kpiName === report.kpi_name)
-      ?.metricColumnName,
+    metricColumnName: storedKpi?.metricColumnName,
+    // Keeps the reprocessed report on the same workflow it was created under,
+    // instead of silently rewriting a PS/CS KPI as a telecom-metric one.
+    workflowSlug: storedKpi?.workflowSlug,
+    kpiSlug: storedKpi?.kpiSlug,
     threshold: clamped,
   };
 
@@ -583,6 +647,8 @@ async function updateKpiThreshold(workbookId, reportId, userId, threshold) {
     const preview = await previewWorkbook(sourcePath);
     const found = preview.kpis.find((k) => k.kpiName === report.kpi_name);
     kpiMeta.metricColumnName = found?.metricColumnName || report.kpi_name;
+    kpiMeta.workflowSlug = kpiMeta.workflowSlug || found?.workflowSlug;
+    kpiMeta.kpiSlug = kpiMeta.kpiSlug || found?.kpiSlug;
   }
 
   await pool.query(`DELETE FROM generated_metrics WHERE report_id = $1`, [reportId]);

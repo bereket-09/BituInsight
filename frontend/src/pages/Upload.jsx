@@ -74,6 +74,13 @@ export default function Upload() {
 
   const isWorkbook = mode === 'workbook';
   const steps = isWorkbook ? WORKBOOK_STEPS : SINGLE_STEPS;
+  /**
+   * A workflow that asked for the workbook treatment itself — the PS and CS
+   * success-ratio exports. Workbook mode then routes each KPI's report to that
+   * workflow rather than to the generic CMM reader, so there is nothing to
+   * steer the user away to, and these KPIs carry no target threshold.
+   */
+  const workbookWorkflow = workbookPreview?.workbookWorkflow || null;
 
   const parseOptions = () => {
     const sheet = preview?.sheets?.find((s) => s.index === sheetIndex);
@@ -563,7 +570,7 @@ export default function Upload() {
           </div>
         )}
 
-        {file && suggestedWorkflow && workflowSlug !== suggestedWorkflow.slug && (
+        {file && suggestedWorkflow && !suggestedWorkflow.workbookMode && workflowSlug !== suggestedWorkflow.slug && (
           <div className="rounded-xl border border-noc-accent/30 bg-noc-accent/[0.07] p-4">
             <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
               This is a {suggestedWorkflow.name} export
@@ -584,6 +591,20 @@ export default function Upload() {
         {/* ——— Workbook review ——— */}
         {isWorkbook && wizardStep === 1 && workbookPreview && (
           <div className="space-y-5">
+            {workbookWorkflow ? (
+              <div className="rounded-xl border border-noc-accent/30 bg-noc-accent/[0.07] p-4">
+                <p className="tabular text-sm font-semibold tracking-tight text-noc-text">
+                  {workbookWorkflow.name} — {workbookPreview.validCount} KPI
+                  {workbookPreview.validCount === 1 ? '' : 's'}, one report each
+                </p>
+                <p className="tabular mt-1 text-xs leading-relaxed text-noc-textDim">
+                  Every KPI below becomes its own report, read by the{' '}
+                  {workbookWorkflow.name} workflow: hourly and daily averages per node, per data
+                  centre and combined. Success ratios are averaged into a bucket, never added, and
+                  these KPIs carry no target threshold.
+                </p>
+              </div>
+            ) : (
             <div className="flex flex-wrap items-end gap-4 rounded-xl border border-noc-border bg-noc-bg/40 p-4">
               <label className="block">
                 <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-noc-muted">
@@ -615,6 +636,7 @@ export default function Upload() {
                 Override the threshold per KPI in the table below
               </p>
             </div>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-4">
               <StatTile label="Data sheets" value={workbookPreview.dataSheetCount} />
@@ -640,7 +662,11 @@ export default function Upload() {
                       <th className="px-4 py-3 font-medium">Sheet</th>
                       <th className="px-4 py-3 font-medium">Rows</th>
                       <th className="px-4 py-3 font-medium">Granularity</th>
-                      <th className="px-4 py-3 font-medium">Threshold %</th>
+                      {workbookWorkflow ? (
+                        <th className="px-4 py-3 font-medium">Nodes</th>
+                      ) : (
+                        <th className="px-4 py-3 font-medium">Threshold %</th>
+                      )}
                       <th className="px-4 py-3 font-medium">Status</th>
                     </tr>
                   </thead>
@@ -657,7 +683,12 @@ export default function Upload() {
                         </td>
                         <td className="px-4 py-3 text-noc-textDim">{kpi.granularity}</td>
                         <td className="px-4 py-3">
-                          {kpi.valid ? (
+                          {workbookWorkflow ? (
+                            <span className="font-mono text-xs text-noc-textDim">
+                              {kpi.nodeCount ?? '—'}
+                              {kpi.sites?.length ? ` · ${kpi.sites.join('/')}` : ''}
+                            </span>
+                          ) : kpi.valid ? (
                             <input
                               type="number"
                               min={1}

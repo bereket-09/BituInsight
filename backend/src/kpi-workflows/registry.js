@@ -91,7 +91,26 @@ function listWorkflowSlugs() {
 /** The built-in workflow made for this workbook's sheets, if one claims it. */
 function findWorkflowForWorkbook(sheetNames) {
   const match = Object.values(WORKFLOW_REGISTRY).find((wf) => wf.matchesWorkbook?.(sheetNames));
-  return match ? { slug: match.slug, name: match.name } : null;
+  return match
+    ? { slug: match.slug, name: match.name, workbookMode: Boolean(match.workbookMode) }
+    : null;
+}
+
+/**
+ * The workflow that wants this workbook processed as a workbook — one upload,
+ * one report per KPI, each report routed to that workflow instead of
+ * telecom-metric. Returns the workflow module itself, because the workbook
+ * service needs its KPI inventory (`listWorkbookKpis`).
+ *
+ * Nothing claims a CMM workbook, so that path keeps falling through to the
+ * telecom-metric default it has always used.
+ */
+function findWorkbookWorkflow(sheetNames) {
+  return (
+    Object.values(WORKFLOW_REGISTRY).find(
+      (wf) => wf.workbookMode && wf.listWorkbookKpis && wf.matchesWorkbook?.(sheetNames)
+    ) || null
+  );
 }
 
 function isBuiltIn(slug) {
@@ -105,4 +124,5 @@ module.exports = {
   listWorkflowSlugs,
   isBuiltIn,
   findWorkflowForWorkbook,
+  findWorkbookWorkflow,
 };

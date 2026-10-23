@@ -150,7 +150,9 @@ async function listEvents(userId, { limit = 50 } = {}) {
 /**
  * Which pipeline a file belongs to, in the order a person would reason about it:
  *   1. an explicit workflow from the sender wins;
- *   2. a workflow built for this export (Peak Attach Users, CMG throughput);
+ *   2. a workflow built for this export (Peak Attach Users, CMG throughput) —
+ *      as one report, or as a workbook of one report per KPI when that workflow
+ *      asks for the workbook treatment (PS/CS success ratios);
  *   3. a CMM workbook with at least one valid KPI sheet;
  *   4. otherwise it is not something the portal knows how to read.
  */
@@ -164,6 +166,15 @@ async function detectRoute(filePath, requestedWorkflow) {
   const workbook = await loadWorkbook(filePath);
   const sheetNames = workbook.worksheets.map((ws) => ws.name);
   const dedicated = findWorkflowForWorkbook(sheetNames);
+  // A workflow that asks for the workbook treatment wants one report per KPI,
+  // not one report for the file; the workbook pipeline routes each KPI to it.
+  if (dedicated?.workbookMode) {
+    return {
+      kind: 'workbook',
+      slug: dedicated.slug,
+      reason: `recognised as ${dedicated.name}`,
+    };
+  }
   if (dedicated) return { kind: 'report', slug: dedicated.slug, reason: `recognised as ${dedicated.name}` };
 
   const preview = await cmmWorkbook.previewWorkbook(filePath);

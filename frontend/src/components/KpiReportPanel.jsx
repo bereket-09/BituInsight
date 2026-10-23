@@ -13,7 +13,11 @@ import CmgThroughputDataTable from './CmgThroughputDataTable';
 import SeriesDataTable from './SeriesDataTable';
 import CmgThroughputInsight from './CmgThroughputInsight';
 import TrafficVolumeExplorer from './TrafficVolumeExplorer';
+import SuccessRatioExplorer from './SuccessRatioExplorer';
 import { parseTarget } from '../utils/parseTarget';
+
+/** PS and CS success ratios share one explorer. */
+const SUCCESS_RATIO_SLUGS = ['ps-kpis-sr', 'cs-kpis-sr'];
 
 export default function KpiReportPanel({ reportId, workbookId, threshold: initialThreshold = 99 }) {
   const queryClient = useQueryClient();
@@ -100,6 +104,7 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
   }
 
   const timeSeries = calculated.timeSeries || reportData.tables?.timeSeries;
+  const isSuccessRatio = SUCCESS_RATIO_SLUGS.includes(report.workflow_slug);
   const chartConfigs = report.charts?.map((chart) => ({
     ...chart,
     parsedConfig: typeof chart.config === 'string' ? JSON.parse(chart.config) : chart.config,
@@ -229,7 +234,13 @@ export default function KpiReportPanel({ reportId, workbookId, threshold: initia
       )}
 
       {timeSeries &&
-        (report.workflow_slug === 'cmg-data-throughput' ? (
+        (isSuccessRatio ? (
+          <SuccessRatioExplorer
+            calculated={calculated}
+            spanId={spanId}
+            onSpanChange={setSpanId}
+          />
+        ) : report.workflow_slug === 'cmg-data-throughput' ? (
           <CmgThroughputExplorer
             timeSeries={timeSeries}
             summary={summary}

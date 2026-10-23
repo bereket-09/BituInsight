@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Cpu,
   ShieldCheck,
+  Gauge,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { dashboardApi } from '../api';
@@ -275,6 +276,68 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* ===================== CAPACITY SATURATION RADAR ===================== */}
+      {data?.capacityRadar && (
+        <section className="rounded-2xl border border-noc-border/90 bg-noc-surface/50 p-5 sm:p-6 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-noc-border/80 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-noc-accent/15 text-noc-accent">
+                <Gauge className="h-4 w-4" strokeWidth={ICON_STROKE} />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-noc-text">Fleet Capacity Saturation Countdown</h3>
+                <p className="text-[11px] text-noc-muted">Continuous headroom telemetry across active nodes</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-noc-textDim">
+                Constrained Node: <span className="font-semibold text-noc-text">{data.capacityRadar.limitingNode}</span>
+              </span>
+              <span
+                className={clsx(
+                  'badge text-[10px]',
+                  data.capacityRadar.riskLevel === 'critical'
+                    ? 'badge-danger'
+                    : data.capacityRadar.riskLevel === 'warning'
+                      ? 'badge-warning'
+                      : 'badge-success'
+                )}
+              >
+                {data.capacityRadar.riskLevel === 'critical'
+                  ? 'Saturation Imminent'
+                  : data.capacityRadar.riskLevel === 'warning'
+                    ? 'Constrained'
+                    : 'Optimal Headroom'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-noc-border/70 bg-noc-card/60 p-3.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-noc-muted">Average Fleet Utilization</span>
+              <p className="tabular mt-1 font-display text-2xl font-bold text-noc-text">{data.capacityRadar.avgUtilization}%</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-noc-border/80">
+                <div className="h-full rounded-full bg-noc-accent" style={{ width: `${data.capacityRadar.avgUtilization}%` }} />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-noc-border/70 bg-noc-card/60 p-3.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-noc-muted">Peak Busy-Hour Stress</span>
+              <p className="tabular mt-1 font-display text-2xl font-bold text-noc-warning">{data.capacityRadar.peakUtilization}%</p>
+              <p className="mt-1 text-[11px] text-noc-muted">Recorded during 95th percentile busy periods</p>
+            </div>
+
+            <div className="rounded-xl border border-noc-border/70 bg-noc-card/60 p-3.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-noc-muted">Projected Saturation</span>
+              <p className="tabular mt-1 font-display text-2xl font-bold text-noc-text">
+                {data.capacityRadar.projectedExhaustionDays ? `${data.capacityRadar.projectedExhaustionDays} Days` : '> 90 Days'}
+              </p>
+              <p className="mt-1 text-[11px] text-noc-muted">Based on 7-day linear growth regression</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===================== MAIN SECTION: ACTIVITY HUB & WORKFLOW USAGE ===================== */}
       <div className="grid gap-6 lg:grid-cols-12">

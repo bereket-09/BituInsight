@@ -142,4 +142,6 @@ function analyze(series, options = {}) {
   };
 }
 
-module.exports = { analyze, analyzeBalance };
+const { correlateWorkbookKpis } = require('./correlation');
+
+module.exports = { analyze, analyzeBalance, correlateWorkbookKpis };

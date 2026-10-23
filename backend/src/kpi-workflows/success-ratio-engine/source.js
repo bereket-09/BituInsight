@@ -192,11 +192,15 @@ function readKpiSheet(worksheet) {
  * Read the KPI sheets of a success-ratio workbook off an already-loaded
  * workbook's worksheets.
  *
- * `options.sheetName` (or `options.kpiId`) narrows the read to one sheet, which
- * is what makes a per-KPI report possible: the workbook upload path creates one
- * report per KPI and each of them reads only its own sheet, so a report carries
- * its own KPI rather than all 22. With neither option the whole workbook is
- * read, exactly as before.
+ * `options.kpiSheetName` narrows the read to one sheet, which is what makes a
+ * per-KPI report possible: the workbook upload path
+ * creates one report per KPI and each of them reads only its own sheet, so a
+ * report carries its own KPI rather than all 22. With neither option the whole
+ * workbook is read, exactly as before.
+ *
+ * Deliberately not `options.sheetName`: that one is the single-report upload's
+ * "which sheet did the preview recommend", and reading it here would silently
+ * cut a whole-workbook report down to one KPI.
  *
  * Ids are assigned over the sheets actually read, so a single-sheet read gives
  * the KPI the same id a whole-workbook read would unless two sheets share a KPI
@@ -207,8 +211,7 @@ function readSuccessRatioWorksheets(worksheets, options = {}) {
   const kpis = [];
   const skippedSheets = [];
   const usedIds = new Set();
-  const wantedSheet = options.sheetName ? String(options.sheetName) : null;
-  const wantedKpiId = options.kpiId || null;
+  const wantedSheet = options.kpiSheetName ? String(options.kpiSheetName) : null;
 
   for (const worksheet of worksheets || []) {
     if (!DATA_SHEET.test(String(worksheet.name || ''))) continue;
@@ -233,8 +236,6 @@ function readSuccessRatioWorksheets(worksheets, options = {}) {
       suffix += 1;
     }
     usedIds.add(id);
-
-    if (wantedKpiId && id !== wantedKpiId) continue;
 
     kpis.push({ id, order: kpis.length, ...read.meta });
     for (const sample of read.samples) {
@@ -267,7 +268,7 @@ function readSuccessRatioWorksheets(worksheets, options = {}) {
     kpis,
     entityHeaders,
     skippedSheets,
-    singleKpi: kpis.length === 1 && Boolean(wantedSheet || wantedKpiId),
+    singleKpi: kpis.length === 1 && Boolean(wantedSheet),
   };
 }
 
@@ -276,8 +277,8 @@ function readSuccessRatioWorksheets(worksheets, options = {}) {
  *
  * The engine hands the whole record list back as `dataRows`, in the shape the
  * workflow pipeline expects from a `loadSource`. `options` is the parse options
- * object the pipeline already carries, so `sheetName` — which the workbook path
- * sets per child report — narrows this to that report's own KPI.
+ * object the pipeline already carries, so `kpiSheetName` — which the workbook
+ * path sets per child report — narrows this to that report's own KPI.
  */
 async function loadSuccessRatioWorkbook(filePath, options = {}) {
   const workbook = await loadWorkbook(filePath);

@@ -75,9 +75,15 @@ const ANALYTICS_PROFILES = {
 /**
  * Most workflows read the one sheet the parser picks. A workflow whose data is
  * spread over several sheets supplies loadSource() and reads the workbook itself.
+ *
+ * The options go to loadSource too, so a workbook-mode workflow can narrow its
+ * read to the one sheet this report is for (parseOptions.sheetName). A
+ * loadSource that ignores the argument behaves exactly as before.
  */
 function loadParsed(workflow, filePath, options) {
-  return workflow.loadSource ? workflow.loadSource(filePath) : parseExcelFile(filePath, options);
+  return workflow.loadSource
+    ? workflow.loadSource(filePath, options)
+    : parseExcelFile(filePath, options);
 }
 
 /**
@@ -143,6 +149,9 @@ function getParseOptions(workflowSlug, userOptions = {}) {
       userOptions.dataStartRowIndex != null ? parseInt(userOptions.dataStartRowIndex, 10) : undefined,
     workflowValidator: workflow.validator,
     metricColumnName: userOptions.metricColumnName,
+    // Workbook mode: which KPI sheet this one report is for. Only a
+    // workbook-mode loadSource looks at it.
+    kpiSheetName: userOptions.kpiSheetName,
   };
 }
 

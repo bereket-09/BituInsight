@@ -304,8 +304,13 @@ function createCalculator(config = {}) {
   function buildInsight(calculated) {
     const { metrics, kpis } = calculated;
     const span = metrics.timeSpan;
+    const subtitle = metrics.singleKpi
+      ? `${metrics.kpiName} across ${metrics.nodeCount} ${metrics.nodeCount === 1 ? 'node' : 'nodes'} and ` +
+        `${metrics.siteCount} data centre${metrics.siteCount === 1 ? '' : 's'}`
+      : `${metrics.kpiCount} ${metrics.kpiGroupLabel}, each calculated on its own across ` +
+        `${metrics.nodeCount} nodes and ${metrics.siteCount} data centres`;
     return {
-      subtitle: `${metrics.kpiCount} ${metrics.kpiGroupLabel}, each calculated on its own across ${metrics.nodeCount} nodes and ${metrics.siteCount} data centres`,
+      subtitle,
       formula: {
         title: 'Per hour and per day',
         expression: 'mean(readings of a node) → mean(nodes of a data centre) → mean(all nodes)',
@@ -317,8 +322,10 @@ function createCalculator(config = {}) {
       pipeline: [
         {
           step: 1,
-          title: 'Read every KPI sheet',
-          detail: `${metrics.kpiCount} ${metrics.kpiGroupLabel} · ${metrics.rawRowCount.toLocaleString()} readings`,
+          title: metrics.singleKpi ? 'Read this KPI’s sheet' : 'Read every KPI sheet',
+          detail: metrics.singleKpi
+            ? `${metrics.kpiName} · ${metrics.rawRowCount.toLocaleString()} readings`
+            : `${metrics.kpiCount} ${metrics.kpiGroupLabel} · ${metrics.rawRowCount.toLocaleString()} readings`,
           icon: 'database',
         },
         {
@@ -347,9 +354,104 @@ function createCalculator(config = {}) {
     };
   }
 
+  /**
+   * Highlights for a report that is one KPI.
+   *
+   * The all-KPIs report's headline figures are comparisons between KPIs, which
+   * say nothing when there is only one. These are the KPI's own figures instead:
+   * its average, its worst and best hour, its weakest node and the gap between
+   * the two data centres.
+   */
+  function singleKpiHighlights(kpi, metrics) {
+    const m = kpi.metrics;
+    return [
+      { label: 'Time span', value: metrics.timeSpan || '—', trend: 'neutral' },
+      {
+        label: 'Average',
+        value: m.average != null ? formatPercent(m.average) : '—',
+        sub: `mean of ${m.nodeCount} node${m.nodeCount === 1 ? '' : 's'}`,
+        trend: m.belowAttention ? 'down' : 'up',
+      },
+      {
+        label: 'Worst hour',
+        value: m.worstHour != null ? formatPercent(m.worstHour) : '—',
+        sub: m.worstHourAt || undefined,
+        trend: 'down',
+      },
+      {
+        label: 'Best hour',
+        value: m.bestHour != null ? formatPercent(m.bestHour) : '—',
+        sub: m.bestHourAt || undefined,
+        trend: 'up',
+      },
+      {
+        label: 'Weakest node',
+        value: m.weakestNodeAverage != null ? formatPercent(m.weakestNodeAverage) : '—',
+        sub: m.weakestNode || undefined,
+        trend: 'down',
+      },
+      {
+        label: 'Nodes',
+        value: `${m.nodeCount}`,
+        sub: kpi.sites.join(' · ') || undefined,
+        trend: 'neutral',
+      },
+      {
+        label: `Hours below ${metrics.attentionThreshold}%`,
+        value: `${m.hoursBelowAttention} of ${m.hourCount}`,
+        trend: m.hoursBelowAttention ? 'down' : 'up',
+      },
+      {
+        label: 'Data coverage',
+        value: formatPercent(m.coveragePct),
+        sub: `${m.readings.toLocaleString()} of ${m.expectedReadings.toLocaleString()} readings`,
+        trend: m.coveragePct >= 99.5 ? 'up' : 'neutral',
+      },
+    ];
+  }
+
   function generateSummary(calculated, transformed) {
-    const { metrics, ranking } = calculated;
+    const { metrics, ranking, kpis } = calculated;
     const weakThree = ranking.slice(0, 3);
+
+    if (metrics.singleKpi && kpis[0]) {
+      const kpi = kpis[0];
+      const m = kpi.metrics;
+      const narrative =
+        `${kpi.name} averaged ${m.average != null ? formatPercent(m.average) : '—'} over ` +
+        `${metrics.timeSpan || 'the period'}, taken as the mean of its ${m.nodeCount} ` +
+        `${m.nodeCount === 1 ? 'node' : 'nodes'}` +
+        (kpi.sites.length ? ` across ${kpi.sites.join(' and ')}` : '') +
+        '. ' +
+        (m.worstHour != null
+          ? `Its lowest hour was ${formatPercent(m.worstHour)} at ${m.worstHourAt}. `
+          : '') +
+        (m.weakestNode
+          ? `${m.weakestNode} is the weakest node at ${formatPercent(m.weakestNodeAverage)}` +
+            (m.strongestNode && m.strongestNode !== m.weakestNode
+              ? `, against ${formatPercent(m.strongestNodeAverage)} on ${m.strongestNode}.`
+              : '.')
+          : '') +
+        (m.siteGapPct != null
+          ? ` MDC1 and MDC2 sit ${m.siteGapPct.toFixed(2)} points apart.`
+          : '');
+
+      return {
+        title: `${kpi.name} — ${metrics.domainLabel}`,
+        kpiName: kpi.name,
+        generatedAt: new Date().toISOString(),
+        dateRange: transformed.dateRange,
+        timeContext: {
+          granularity: 'Hourly',
+          span: metrics.timeSpan,
+          points: m.hourCount,
+        },
+        insight: buildInsight(calculated),
+        highlights: singleKpiHighlights(kpi, metrics),
+        anomalies: [],
+        narrative,
+      };
+    }
 
     const highlights = [
       { label: 'Time span', value: metrics.timeSpan || '—', trend: 'neutral' },
